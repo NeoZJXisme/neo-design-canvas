@@ -1,0 +1,84 @@
+name: Neo Canvas Desktop v0.1
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-installer:
+    name: Build Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            canvas-agent/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Typecheck web
+        working-directory: web
+        run: npm run typecheck
+
+      - name: Build web
+        working-directory: web
+        run: npm run build
+
+      - name: Install Canvas Agent dependencies
+        working-directory: canvas-agent
+        run: npm ci
+
+      - name: Build Canvas Agent
+        working-directory: canvas-agent
+        run: npm run build
+
+      - name: Prune Canvas Agent development dependencies
+        working-directory: canvas-agent
+        run: npm prune --omit=dev
+
+      - name: Install desktop packager
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+
+      - name: Build NSIS installer
+        working-directory: desktop
+        run: npm run dist:win
+
+      - name: Generate SHA-256
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "desktop/dist/Neo-Canvas-Setup-0.1.0.exe" | Select-Object -First 1
+          if (-not $installer) { throw "Neo Canvas installer was not generated." }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *$($installer.Name)" | Set-Content -Encoding ascii "$($installer.FullName).sha256"
+          Write-Host "Installer: $($installer.FullName)"
+          Write-Host "SHA-256: $hash"
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: neo-canvas-windows-v0.1.0
+          path: |
+            desktop/dist/Neo-Canvas-Setup-0.1.0.exe
+            desktop/dist/Neo-Canvas-Setup-0.1.0.exe.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
