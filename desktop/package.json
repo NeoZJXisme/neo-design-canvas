@@ -1,6 +1,6 @@
 {
   "name": "neo-canvas-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Neo Canvas desktop shell for Windows",
   "main": "main.cjs",
