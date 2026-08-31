@@ -61,6 +61,12 @@ jobs:
         working-directory: canvas-agent
         run: npm prune --omit=dev
 
+      - name: Verify Canvas Agent runtime dependencies
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "canvas-agent/node_modules/express/package.json")) { throw "express is missing before desktop packaging." }
+          if (-not (Test-Path "canvas-agent/node_modules/@openai/codex/package.json")) { throw "@openai/codex is missing before desktop packaging." }
+
       - name: Install desktop packager
         working-directory: desktop
         run: npm install --no-audit --no-fund
@@ -68,6 +74,12 @@ jobs:
       - name: Build NSIS installer
         working-directory: desktop
         run: npm run dist:win
+
+      - name: Verify packaged Canvas Agent dependencies
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "desktop/dist/win-unpacked/resources/canvas-agent/node_modules/express/package.json")) { throw "express was not copied into the packaged Canvas Agent." }
+          if (-not (Test-Path "desktop/dist/win-unpacked/resources/canvas-agent/node_modules/@openai/codex/package.json")) { throw "@openai/codex was not copied into the packaged Canvas Agent." }
 
       - name: Smoke launch packaged desktop
         shell: pwsh
@@ -79,14 +91,10 @@ jobs:
           $env:NEO_CANVAS_LOG_FILE = $smokeLog
           $process = Start-Process -FilePath $appPath -PassThru
           $deadline = (Get-Date).AddSeconds(30)
-          $terminalMarker = $false
           while ((Get-Date) -lt $deadline) {
             if (Test-Path $smokeLog) {
               $content = Get-Content $smokeLog -Raw
-              if ($content -match "Desktop smoke test passed|Fatal startup error|Canvas Agent startup failed") {
-                $terminalMarker = $true
-                break
-              }
+              if ($content -match "Desktop smoke test passed|Fatal startup error|Canvas Agent startup failed") { break }
             }
             if ($process.HasExited) { break }
             Start-Sleep -Milliseconds 500
