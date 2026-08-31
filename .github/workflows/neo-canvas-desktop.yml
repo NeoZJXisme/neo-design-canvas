@@ -70,6 +70,7 @@ jobs:
         run: |
           if (-not (Test-Path "canvas-agent/node_modules/express/package.json")) { throw "express is missing before desktop packaging." }
           if (-not (Test-Path "canvas-agent/node_modules/@openai/codex/package.json")) { throw "@openai/codex is missing before desktop packaging." }
+          if (-not (Test-Path "desktop/preload.cjs")) { throw "NZX desktop preload bridge is missing." }
 
       - name: Install desktop packager
         working-directory: desktop
@@ -119,7 +120,7 @@ jobs:
       - name: Generate SHA-256
         shell: pwsh
         run: |
-          $installer = Get-ChildItem "desktop/dist/Neo-Canvas-Setup-0.1.3.exe" | Select-Object -First 1
+          $installer = Get-ChildItem "desktop/dist/Neo-Canvas-Setup-0.1.4.exe" | Select-Object -First 1
           if (-not $installer) { throw "Neo Canvas installer was not generated." }
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash *$($installer.Name)" | Set-Content -Encoding ascii "$($installer.FullName).sha256"
@@ -129,10 +130,10 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: neo-canvas-windows-v0.1.3-apilio-adapters
+          name: neo-canvas-windows-v0.1.4-nzx-projects
           path: |
-            desktop/dist/Neo-Canvas-Setup-0.1.3.exe
-            desktop/dist/Neo-Canvas-Setup-0.1.3.exe.sha256
+            desktop/dist/Neo-Canvas-Setup-0.1.4.exe
+            desktop/dist/Neo-Canvas-Setup-0.1.4.exe.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
