@@ -3,7 +3,8 @@ import { Cpu } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import i18n from "@/i18n";
-import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger } from "@/components/ui/select";
+import { guessModelProvider, modelProviderIcon, providerSortRank, type ModelProvider } from "@/lib/model-taxonomy";
 import { cn } from "@/lib/utils";
 import { modelOptionLabel, modelOptionName, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
@@ -18,11 +19,17 @@ type ModelPickerProps = {
     onMissingConfig?: () => void;
 };
 
+type ProviderGroup = {
+    provider: ModelProvider;
+    models: string[];
+};
+
 export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder, onMissingConfig }: ModelPickerProps) {
     const { t } = useTranslation();
     const pickerId = useId();
     const [open, setOpen] = useState(false);
     const options = useMemo(() => Array.from(new Set([...(config.channelMode === "local" && !capability ? [value] : []), ...selectableModelsByCapability(config, capability)].filter((model): model is string => Boolean(model)))), [capability, config, value]);
+    const groups = useMemo(() => groupModelsByProvider(options), [options]);
     const current = value || "";
     const pickerPlaceholder = placeholder || t("settingsPanels.model.select");
 
@@ -61,7 +68,7 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
             </SelectTrigger>
             <SelectContent
                 data-canvas-no-zoom
-                className="z-[1200] w-80 max-w-[calc(100vw-24px)] rounded-xl border border-border/70 bg-popover p-1 shadow-xl"
+                className="z-[1200] w-[28rem] max-w-[calc(100vw-24px)] rounded-xl border border-border/70 bg-popover p-1 shadow-xl"
                 position="popper"
                 align="start"
                 side="bottom"
@@ -69,11 +76,20 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                 onPointerDown={(event) => event.stopPropagation()}
                 onMouseDown={(event) => event.stopPropagation()}
             >
-                {options.length ? (
-                    options.map((model) => (
-                        <SelectItem key={model} value={model} textValue={modelOptionLabel(config, model)}>
-                            <ModelLabel config={config} model={model} />
-                        </SelectItem>
+                {groups.length ? (
+                    groups.map((group) => (
+                        <SelectGroup key={group.provider.key}>
+                            <SelectLabel className="sticky top-0 z-10 flex items-center gap-2 rounded-md bg-popover/95 px-2 py-1.5 font-medium backdrop-blur">
+                                <ProviderIcon provider={group.provider} />
+                                <span>{group.provider.label}</span>
+                                <span className="ml-auto text-[10px] font-normal text-muted-foreground">{group.models.length}</span>
+                            </SelectLabel>
+                            {group.models.map((model) => (
+                                <SelectItem key={model} value={model} textValue={`${group.provider.label} ${modelOptionLabel(config, model)}`}>
+                                    <ModelLabel config={config} model={model} />
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
                     ))
                 ) : (
                     <SelectItem value="__empty__" disabled>
@@ -83,6 +99,19 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
             </SelectContent>
         </Select>
     );
+}
+
+function groupModelsByProvider(models: string[]): ProviderGroup[] {
+    const map = new Map<string, ProviderGroup>();
+    for (const model of models) {
+        const provider = guessModelProvider(modelOptionName(model));
+        const existing = map.get(provider.key);
+        if (existing) existing.models.push(model);
+        else map.set(provider.key, { provider, models: [model] });
+    }
+    return Array.from(map.values())
+        .map((group) => ({ ...group, models: group.models.sort((a, b) => modelOptionName(a).localeCompare(modelOptionName(b))) }))
+        .sort((a, b) => providerSortRank(a.provider) - providerSortRank(b.provider) || a.provider.label.localeCompare(b.provider.label));
 }
 
 function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
@@ -100,18 +129,12 @@ function ModelLabel({ config, model }: { config: AiConfig; model: string }) {
     );
 }
 
-function ModelIcon({ model }: { model: string }) {
-    const icon = resolveModelIcon(modelOptionName(model));
+function ProviderIcon({ provider }: { provider: ModelProvider }) {
+    const icon = modelProviderIcon(provider);
     return icon ? <img src={icon} alt="" className="size-4 shrink-0 dark:invert" /> : <Cpu className="size-4 shrink-0 opacity-70" />;
 }
 
-function resolveModelIcon(model: string) {
-    const name = model.toLowerCase();
-    if (name.includes("claude") || name.includes("anthropic")) return "/icons/claude.svg";
-    if (name.includes("gemini") || name.includes("google")) return "/icons/gemini.svg";
-    if (name.includes("gpt") || name.includes("openai")) return "/icons/openai.svg";
-    if (name.includes("grok") || name.includes("grok")) return "/icons/grok.svg";
-    if (name.includes("deepseek") || name.includes("deepseek")) return "/icons/deepseek.svg";
-    if (name.includes("glm") || name.includes("glm")) return "/icons/glm.svg";
-    return "";
+function ModelIcon({ model }: { model: string }) {
+    const provider = guessModelProvider(modelOptionName(model));
+    return <ProviderIcon provider={provider} />;
 }
