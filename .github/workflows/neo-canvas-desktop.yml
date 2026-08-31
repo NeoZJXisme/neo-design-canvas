@@ -69,6 +69,27 @@ jobs:
         working-directory: desktop
         run: npm run dist:win
 
+      - name: Smoke launch packaged desktop
+        shell: pwsh
+        run: |
+          $appPath = Resolve-Path "desktop/dist/win-unpacked/Neo Canvas.exe"
+          $smokeLog = Join-Path $env:RUNNER_TEMP "neo-canvas-desktop-smoke.log"
+          Remove-Item $smokeLog -ErrorAction SilentlyContinue
+          $env:NEO_CANVAS_SMOKE_TEST = "1"
+          $env:NEO_CANVAS_LOG_FILE = $smokeLog
+          $process = Start-Process -FilePath $appPath -PassThru
+          if (-not $process.WaitForExit(30000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw "Neo Canvas packaged desktop did not finish its smoke launch within 30 seconds."
+          }
+          if (-not (Test-Path $smokeLog)) { throw "Neo Canvas desktop smoke log was not created." }
+          $content = Get-Content $smokeLog -Raw
+          Write-Host $content
+          if ($content -match "Fatal startup error|Canvas Agent startup failed") { throw "Neo Canvas reported a fatal desktop startup error." }
+          if ($content -notmatch "Canvas Agent ready:|Using existing Canvas Agent:") { throw "Creative Director Agent did not become ready." }
+          if ($content -notmatch "Main window loaded") { throw "Neo Canvas main window did not load." }
+          if ($content -notmatch "Desktop smoke test passed") { throw "Neo Canvas desktop smoke hook did not complete." }
+
       - name: Generate SHA-256
         shell: pwsh
         run: |
