@@ -1,13 +1,14 @@
 import { memo, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { App, Empty, Input, Popconfirm, Select, Spin, Tag } from "antd";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Check, ChevronRight, Download, Eye, FileText, Image as ImageIcon, ListChecks, Music2, Plus, Search, Settings2, Square, Trash2, Type, Video } from "lucide-react";
+import { BookOpen, Check, ChevronRight, Download, Eye, FileText, Image as ImageIcon, ListChecks, Music2, Plus, Search, Settings2, Sparkles, Square, Star, Trash2, Type, Video } from "lucide-react";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { exportCanvasNodes } from "@/lib/canvas/canvas-export";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
+import type { NeoWorkflowNodeKind } from "@/lib/canvas/neo-design-workflow";
 import { cn } from "@/lib/utils";
 import { PromptDetailDialog } from "@/pages/prompts/components/prompt-detail-dialog";
 import { fetchSourcePrompts, type Prompt } from "@/services/api/prompts";
@@ -24,7 +25,7 @@ import type { InsertAssetPayload } from "./asset-picker-modal";
 const PANEL_MOTION_SECONDS = CANVAS_SIDE_PANEL_MOTION_MS / 1000;
 const PANEL_EASE = [0.22, 1, 0.36, 1] as const;
 
-type PanelTab = "canvas" | "assets" | "prompts";
+type PanelTab = "canvas" | "assets" | "prompts" | "favorites" | "jobs";
 
 type Props = {
     nodes: CanvasNodeData[];
@@ -32,6 +33,7 @@ type Props = {
     onFocusNode: (nodeId: string) => void;
     onPreviewNode: (nodeId: string) => void;
     onInsertAsset: (payload: InsertAssetPayload) => void;
+    onCreateWorkflowNode: (kind: NeoWorkflowNodeKind) => void;
 };
 
 const NODE_TYPE_ICON: Record<string, typeof Square> = {
@@ -50,7 +52,7 @@ const STATUS_COLOR: Record<string, string> = {
     idle: "transparent",
 };
 
-export function CanvasSidePanel({ nodes, selectedNodeIds, onFocusNode, onPreviewNode, onInsertAsset }: Props) {
+export function CanvasSidePanel({ nodes, selectedNodeIds, onFocusNode, onPreviewNode, onInsertAsset, onCreateWorkflowNode }: Props) {
     const { t } = useTranslation();
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [tab, setTab] = useState<PanelTab>("canvas");
@@ -99,18 +101,24 @@ export function CanvasSidePanel({ nodes, selectedNodeIds, onFocusNode, onPreview
                 style={{ width, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
                 data-canvas-no-zoom
             >
-                <div className="flex items-center gap-5 px-4 pt-3.5">
+                <div className="thin-scrollbar flex items-center gap-4 overflow-x-auto px-4 pt-3.5">
                     <TabButton label={t("canvas.sidePanel.canvas")} active={tab === "canvas"} theme={theme} onClick={() => setTab("canvas")} />
                     <TabButton label={t("canvas.sidePanel.assets")} active={tab === "assets"} theme={theme} onClick={() => setTab("assets")} />
                     <TabButton label={t("canvas.sidePanel.prompts")} active={tab === "prompts"} theme={theme} onClick={() => setTab("prompts")} />
+                    <TabButton label={t("canvas.sidePanel.favorites")} active={tab === "favorites"} theme={theme} onClick={() => setTab("favorites")} />
+                    <TabButton label={t("canvas.sidePanel.jobs")} active={tab === "jobs"} theme={theme} onClick={() => setTab("jobs")} />
                 </div>
                 <div className="mt-2 min-h-0 flex-1 overflow-hidden">
                     {tab === "canvas" ? (
-                        <CanvasNodesTab nodes={nodes} selectedNodeIds={selectedNodeIds} onFocusNode={onFocusNode} onPreviewNode={onPreviewNode} theme={theme} />
+                        <CanvasNodesTab nodes={nodes} selectedNodeIds={selectedNodeIds} onFocusNode={onFocusNode} onPreviewNode={onPreviewNode} onCreateWorkflowNode={onCreateWorkflowNode} theme={theme} />
                     ) : tab === "assets" ? (
                         <CanvasAssetsTab onInsert={onInsertAsset} theme={theme} />
-                    ) : (
+                    ) : tab === "prompts" ? (
                         <CanvasPromptsTab onInsert={onInsertAsset} theme={theme} />
+                    ) : tab === "favorites" ? (
+                        <FavoritesTab nodes={nodes} onFocusNode={onFocusNode} theme={theme} />
+                    ) : (
+                        <JobsTab nodes={nodes} onFocusNode={onFocusNode} />
                     )}
                 </div>
                 <button type="button" className="absolute inset-y-0 right-0 z-40 w-4 translate-x-1/2 cursor-col-resize" onPointerDown={startResize} aria-label={t("canvas.sidePanel.resize")} />
@@ -121,10 +129,37 @@ export function CanvasSidePanel({ nodes, selectedNodeIds, onFocusNode, onPreview
 
 function TabButton({ label, active, theme, onClick }: { label: string; active: boolean; theme: CanvasTheme; onClick: () => void }) {
     return (
-        <button type="button" onClick={onClick} className="relative pb-1.5 text-sm font-semibold transition-opacity" style={{ color: theme.node.text, opacity: active ? 1 : 0.45 }}>
+        <button type="button" onClick={onClick} className="relative shrink-0 pb-1.5 text-sm font-semibold transition-opacity" style={{ color: theme.node.text, opacity: active ? 1 : 0.45 }}>
             {label}
             {active ? <motion.span layoutId="sidePanelTabIndicator" className="absolute inset-x-0 -bottom-px h-0.5 rounded-full" style={{ background: theme.toolbar.activeText }} transition={{ type: "spring", stiffness: 500, damping: 34 }} /> : null}
         </button>
+    );
+}
+
+const WORKFLOW_ACTIONS: { kind: NeoWorkflowNodeKind; icon: typeof Square }[] = [
+    { kind: "reference", icon: ImageIcon },
+    { kind: "prompt", icon: Type },
+    { kind: "generation", icon: Settings2 },
+    { kind: "output", icon: Square },
+];
+
+function WorkflowQuickCreate({ onCreate }: { onCreate: (kind: NeoWorkflowNodeKind) => void }) {
+    const { t } = useTranslation();
+    return (
+        <div className="px-3 pb-2.5">
+            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium opacity-60">
+                <Sparkles className="size-3.5" />
+                {t("canvas.sidePanel.workflow.title")}
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+                {WORKFLOW_ACTIONS.map(({ kind, icon: Icon }) => (
+                    <button key={kind} type="button" className="flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] transition hover:bg-black/5 dark:hover:bg-white/10" onClick={() => onCreate(kind)}>
+                        <Icon className="size-4 opacity-65" />
+                        <span className="truncate">{t(`canvas.sidePanel.workflow.${kind}`)}</span>
+                    </button>
+                ))}
+            </div>
+        </div>
     );
 }
 
@@ -139,7 +174,7 @@ function nodePreviewText(node: CanvasNodeData) {
     return getNodeDefinition(node.type)?.title || node.type;
 }
 
-function CanvasNodesTab({ nodes, selectedNodeIds, onFocusNode, onPreviewNode, theme }: { nodes: CanvasNodeData[]; selectedNodeIds: Set<string>; onFocusNode: (nodeId: string) => void; onPreviewNode: (nodeId: string) => void; theme: CanvasTheme }) {
+function CanvasNodesTab({ nodes, selectedNodeIds, onFocusNode, onPreviewNode, onCreateWorkflowNode, theme }: { nodes: CanvasNodeData[]; selectedNodeIds: Set<string>; onFocusNode: (nodeId: string) => void; onPreviewNode: (nodeId: string) => void; onCreateWorkflowNode: (kind: NeoWorkflowNodeKind) => void; theme: CanvasTheme }) {
     const { message } = App.useApp();
     const { t } = useTranslation();
     const [keyword, setKeyword] = useState("");
@@ -217,6 +252,7 @@ function CanvasNodesTab({ nodes, selectedNodeIds, onFocusNode, onPreviewNode, th
                 </button>
                 {selectMode ? null : <Select size="small" variant="borderless" className="w-20" value={typeFilter} onChange={setTypeFilter} options={NODE_FILTER_VALUES.map((value) => ({ value, label: value === "all" ? t("common.all") : t(`canvas.sidePanel.filter.${value}`) }))} />}
             </div>
+            <WorkflowQuickCreate onCreate={onCreateWorkflowNode} />
             <div className="px-3 pb-2.5">
                 <Input size="small" allowClear prefix={<Search className="size-3.5 text-stone-400" />} placeholder={t("canvas.sidePanel.searchNodes")} value={keyword} onChange={(e) => setKeyword(e.target.value)} />
             </div>
@@ -289,6 +325,93 @@ function CheckMark({ checked, theme }: { checked: boolean; theme: CanvasTheme })
         <span className="grid size-4 shrink-0 place-items-center rounded border transition" style={{ borderColor: checked ? theme.toolbar.activeText : theme.node.stroke, background: checked ? theme.toolbar.activeText : "transparent" }}>
             {checked ? <Check className="size-3 text-white" /> : null}
         </span>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Neo Canvas tabs: favorites and generation job summaries.
+// ---------------------------------------------------------------------------
+
+function FavoritesTab({ nodes, onFocusNode, theme }: { nodes: CanvasNodeData[]; onFocusNode: (nodeId: string) => void; theme: CanvasTheme }) {
+    const { t } = useTranslation();
+    const favorites = nodes.filter((node) => node.metadata?.favorite);
+    return (
+        <div className="thin-scrollbar h-full overflow-y-auto px-2 pb-3">
+            {favorites.length ? (
+                <div className="space-y-1.5">
+                    {favorites.map((node) => {
+                        const Icon = NODE_TYPE_ICON[node.type] || FileText;
+                        return (
+                            <button key={node.id} type="button" onClick={() => onFocusNode(node.id)} className="flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-black/5 dark:hover:bg-white/5">
+                                <span className="relative grid size-10 shrink-0 place-items-center">
+                                    <Icon className="size-5 opacity-60" />
+                                    <Star className="absolute right-0 top-0 size-3.5" fill="currentColor" style={{ color: theme.toolbar.activeText }} />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-sm font-medium">{node.title || t("canvas.node.untitled")}</span>
+                                    <span className="mt-0.5 flex gap-2 text-xs opacity-50">
+                                        <span>{getNodeDefinition(node.type)?.title || node.type}</span>
+                                        <span>{t("canvas.sidePanel.rating")}: {node.metadata?.rating ?? "—"}</span>
+                                    </span>
+                                    <span className="mt-1 block truncate text-xs opacity-55">{node.metadata?.designNotes || t("canvas.sidePanel.noNotes")}</span>
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="pt-16 text-center text-sm opacity-40">{t("canvas.sidePanel.noFavorites")}</div>
+            )}
+        </div>
+    );
+}
+
+const JOB_STATUSES = ["loading", "error", "success", "idle"] as const;
+
+function JobsTab({ nodes, onFocusNode }: { nodes: CanvasNodeData[]; onFocusNode: (nodeId: string) => void }) {
+    const { t } = useTranslation();
+    const jobs = nodes.filter((node) => {
+        const status = node.metadata?.status;
+        return node.metadata?.workflowRole === "generation" || status === "loading" || status === "error" || status === "success" && Boolean(node.metadata?.prompt || node.metadata?.images?.length || node.metadata?.texts?.length);
+    });
+    const summary = Object.fromEntries(JOB_STATUSES.map((status) => [status, 0])) as Record<(typeof JOB_STATUSES)[number], number>;
+    jobs.forEach((node) => summary[node.metadata?.status || "idle"] += 1);
+    return (
+        <div className="flex h-full flex-col">
+            <div className="grid grid-cols-4 gap-1 px-3 pb-3 pt-1">
+                {JOB_STATUSES.map((status) => (
+                    <div key={status} className="rounded-lg px-1 py-2 text-center">
+                        <div className="text-sm font-semibold">{summary[status]}</div>
+                        <div className="mt-0.5 text-[11px] opacity-50">{t(`canvas.sidePanel.jobStatus.${status}`)}</div>
+                    </div>
+                ))}
+            </div>
+            <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+                {jobs.length ? (
+                    <div className="space-y-1.5">
+                        {jobs.map((node) => {
+                            const status = node.metadata?.status || "idle";
+                            const Icon = NODE_TYPE_ICON[node.type] || Settings2;
+                            return (
+                                <button key={node.id} type="button" onClick={() => onFocusNode(node.id)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-black/5 dark:hover:bg-white/5">
+                                    <Icon className="size-5 shrink-0 opacity-60" />
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-sm font-medium">{node.title || t("canvas.node.untitled")}</span>
+                                        <span className="block truncate text-xs opacity-50">{getNodeDefinition(node.type)?.title || node.type}</span>
+                                    </span>
+                                    <span className="flex shrink-0 items-center gap-1.5 text-xs opacity-65">
+                                        <span className="size-1.5 rounded-full" style={{ background: STATUS_COLOR[status] }} />
+                                        {t(`canvas.sidePanel.jobStatus.${status}`)}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="pt-12 text-center text-sm opacity-40">{t("canvas.sidePanel.noJobs")}</div>
+                )}
+            </div>
+        </div>
     );
 }
 

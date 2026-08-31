@@ -47,6 +47,7 @@ import { usePluginHost } from "@/pages/canvas/hooks/use-plugin-host";
 import { buildNodeMentionReferences, getGroupResourceNodes, isCanvasReferenceNode, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { exportCanvasProjects } from "@/lib/canvas/canvas-export";
 import { applyNodeConfigPatch, audioMetadata, buildAudioGenerationMetadata, buildImageGenerationMetadata, createCanvasNode, imageMetadata, videoMetadata } from "@/lib/canvas/canvas-node-factory";
+import { createNeoWorkflowNode, type NeoWorkflowNodeKind } from "@/lib/canvas/neo-design-workflow";
 import { findContainingGroupId, findGroupDropTarget, getConnectionTargetAnchor, normalizeConnection, snapNodesIntoGroup } from "@/lib/canvas/canvas-node-geometry";
 import {
     audioExtension,
@@ -720,6 +721,25 @@ function InfiniteCanvasPage() {
                     ? true
                     : isBuiltinType(type) && type !== CanvasNodeType.Text && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Group;
             if (wantsPanel) setDialogNodeId(newNode.id);
+        },
+        [effectiveConfig.canvasImageCount, effectiveConfig.count, effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.size, getCanvasCenter],
+    );
+
+    const createWorkflowNode = useCallback(
+        (kind: NeoWorkflowNodeKind) => {
+            const newNode = createNeoWorkflowNode(kind, getCanvasCenter());
+            if (kind === "generation") {
+                newNode.metadata = {
+                    ...newNode.metadata,
+                    model: effectiveConfig.imageModel || effectiveConfig.model,
+                    size: effectiveConfig.size,
+                    count: getGenerationCount(effectiveConfig.canvasImageCount || effectiveConfig.count),
+                };
+            }
+            setNodes((prev) => [...prev, newNode]);
+            setSelectedNodeIds(new Set([newNode.id]));
+            setSelectedConnectionId(null);
+            if (kind === "reference" || kind === "generation") setDialogNodeId(newNode.id);
         },
         [effectiveConfig.canvasImageCount, effectiveConfig.count, effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.size, getCanvasCenter],
     );
@@ -1516,6 +1536,10 @@ function InfiniteCanvasPage() {
 
     const handleNodeTitleChange = useCallback((nodeId: string, title: string) => {
         setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, title } : node)));
+    }, []);
+
+    const toggleNodeFavorite = useCallback((nodeId: string) => {
+        setNodes((prev) => prev.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, favorite: !node.metadata?.favorite } } : node));
     }, []);
 
     const toggleBatchExpanded = useCallback((nodeId: string) => {
@@ -2913,7 +2937,7 @@ function InfiniteCanvasPage() {
 
     return (
         <main className="flex h-full min-h-0 overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
-            <CanvasSidePanel nodes={nodes} selectedNodeIds={selectedNodeIds} onFocusNode={focusNode} onPreviewNode={setPreviewNodeId} onInsertAsset={handleAssetInsert} />
+            <CanvasSidePanel nodes={nodes} selectedNodeIds={selectedNodeIds} onFocusNode={focusNode} onPreviewNode={setPreviewNodeId} onInsertAsset={handleAssetInsert} onCreateWorkflowNode={createWorkflowNode} />
             <section className="relative min-w-0 flex-1 overflow-hidden">
                 <CanvasTopBar
                     title={currentProject?.title || t("canvas.projectPage.untitledCanvas")}
@@ -3069,6 +3093,7 @@ function InfiniteCanvasPage() {
                     onKeep={keepNodeToolbar}
                     onLeave={hideNodeToolbar}
                     onInfo={(node) => setInfoNodeId(node.id)}
+                    onToggleFavorite={(node) => toggleNodeFavorite(node.id)}
                     onDecreaseFont={(node) => handleFontSizeChange(node.id, Math.max(10, (node.metadata?.fontSize || 14) - 2))}
                     onIncreaseFont={(node) => handleFontSizeChange(node.id, Math.min(32, (node.metadata?.fontSize || 14) + 2))}
                     onToggleDialog={(node) => setDialogNodeId((current) => (current === node.id ? null : node.id))}

@@ -148,7 +148,7 @@ export function CanvasTopBar({
                         icon={<Bot className="size-4" />}
                         onClick={onToggleAgent}
                     >
-                        Agent
+                        {t("canvas.creativeDirector")}
                     </Button>
                 </div>
             </div>
