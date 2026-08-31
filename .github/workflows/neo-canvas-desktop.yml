@@ -34,6 +34,13 @@ jobs:
         working-directory: web
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
+      - name: Install matching Rollup Windows native package
+        working-directory: web
+        shell: pwsh
+        run: |
+          $rollupVersion = node -p "require('./node_modules/rollup/package.json').version"
+          npm install --no-save --package-lock=false --legacy-peer-deps "@rollup/rollup-win32-x64-msvc@$rollupVersion"
+
       - name: Typecheck web
         working-directory: web
         run: npm run typecheck
