@@ -20,7 +20,7 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
     ];
     const capabilityOptions: Array<{ label: string; value: ModelCapability }> = ["image", "video", "text", "audio"].map((value) => ({ label: t(`config.channelEditor.capabilities.${value}`), value: value as ModelCapability }));
     const priceUnitOptions: Array<{ label: string; value: ModelPriceUnit }> = ["per_call", "per_output", "per_second"].map((value) => ({ label: t(`config.channelEditor.priceUnits.${value}`), value: value as ModelPriceUnit }));
-    const currencyOptions: Array<{ label: string; value: PriceCurrency }> = ["USD", "CNY"].map((value) => ({ label: value, value }));
+    const currencyOptions: Array<{ label: string; value: PriceCurrency }> = (["USD", "CNY"] as const).map((value) => ({ label: value, value }));
 
     useEffect(() => {
         if (open && channel) setDraft(channel);
