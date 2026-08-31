@@ -14,4 +14,9 @@ All notable changes to this project will be documented in this file.
 - Added channel **Ping API** testing with latency and model-count feedback before saving a provider.
 - Expanded model discovery compatibility for common relay response envelopes (`data`, `models`, `items`, nested `result`, and common model id/name fields).
 - Improved automatic image capability detection for modern creative image model names including Banana, Qwen Image, Wan Image, Ideogram, Recraft, Firefly, Kolors, HiDream, Jimeng, and Doubao Image.
+- Added Apilio full-catalog model synchronization with automatic text / image / video / audio classification and provider taxonomy for large multi-provider model libraries.
+- Added provider-grouped model pickers so large Apilio catalogs remain navigable instead of rendering as one flat model list.
+- Added the first **Apilio Adapter Registry**: Seedance / Veo / Wan / Grok Video / Sora2 families can use Apilio's unified `/v2/videos/generations` task protocol automatically.
+- Added native Kling routing for text-to-video and image-to-video, including Apilio's Kling task polling paths and a compatibility fallback for alternate query paths.
+- Added native Suno music generation routing with Suno model-version mapping (v5.5 / v5 / v4.5+ / v4.5 / v4), clip polling, and MP3 retrieval while preserving OpenAI-compatible TTS as the fallback for speech models.
 
