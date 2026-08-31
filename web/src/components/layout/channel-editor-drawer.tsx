@@ -1,9 +1,9 @@
-import { Button, Drawer, Input, Segmented, Select, Space } from "antd";
+import { Button, Drawer, Input, InputNumber, Segmented, Select, Space } from "antd";
 import { ListPlus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { defaultBaseUrlForApiFormat, guessCapability, normalizeChannelModels, type ApiCallFormat, type ChannelModel, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
+import { defaultBaseUrlForApiFormat, guessCapability, normalizeChannelModels, type ApiCallFormat, type ChannelModel, type ModelCapability, type ModelChannel, type ModelPriceUnit, type PriceCurrency } from "@/stores/use-config-store";
 import { ModelScriptEditor } from "./model-script-editor";
 import { ModelSelectModal } from "./model-select-modal";
 
@@ -19,6 +19,8 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
         { label: "Gemini", value: "gemini" },
     ];
     const capabilityOptions: Array<{ label: string; value: ModelCapability }> = ["image", "video", "text", "audio"].map((value) => ({ label: t(`config.channelEditor.capabilities.${value}`), value: value as ModelCapability }));
+    const priceUnitOptions: Array<{ label: string; value: ModelPriceUnit }> = ["per_call", "per_output", "per_second"].map((value) => ({ label: t(`config.channelEditor.priceUnits.${value}`), value: value as ModelPriceUnit }));
+    const currencyOptions: Array<{ label: string; value: PriceCurrency }> = ["USD", "CNY"].map((value) => ({ label: value, value }));
 
     useEffect(() => {
         if (open && channel) setDraft(channel);
@@ -41,6 +43,7 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
 
     const setCapability = (name: string, capability: ModelCapability) => setModels(draft.models.map((model) => (model.name === name ? { ...model, capability } : model)));
     const setScript = (name: string, script: string) => setModels(draft.models.map((model) => (model.name === name ? { ...model, script: script || undefined } : model)));
+    const setPricing = (name: string, patch: Pick<ChannelModel, "unitPrice" | "priceUnit">) => setModels(draft.models.map((model) => (model.name === name ? { ...model, ...patch } : model)));
     const removeModel = (name: string) => setModels(draft.models.filter((model) => model.name !== name));
 
     const save = () => {
@@ -73,6 +76,14 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
                     <span className="mb-1 block text-sm font-medium">{t("config.channelEditor.protocol")}</span>
                     <Select className="w-full" value={draft.apiFormat} options={apiFormatOptions} onChange={changeApiFormat} />
                 </label>
+                <label className="block">
+                    <span className="mb-1 block text-sm font-medium">{t("config.channelEditor.provider")}</span>
+                    <Input value={draft.provider || ""} onChange={(event) => patch({ provider: event.target.value })} placeholder={t("config.channelEditor.providerPlaceholder")} />
+                </label>
+                <label className="block">
+                    <span className="mb-1 block text-sm font-medium">{t("config.channelEditor.currency")}</span>
+                    <Select className="w-full" value={draft.currency || "USD"} options={currencyOptions} onChange={(currency) => patch({ currency })} />
+                </label>
                 <label className="block md:col-span-2">
                     <span className="mb-1 block text-sm font-medium">{t("config.channelEditor.baseUrl")}</span>
                     <Input value={draft.baseUrl} onChange={(event) => patch({ baseUrl: event.target.value })} placeholder="https://api.example.com" />
@@ -100,8 +111,10 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
                             <span className="min-w-0 flex-1 truncate text-sm" title={model.name}>
                                 {model.name}
                             </span>
-                            <div className="flex shrink-0 items-center gap-2">
+                            <div className="flex shrink-0 flex-wrap items-center gap-2">
                                 <Segmented size="small" value={model.capability} options={capabilityOptions} onChange={(value) => setCapability(model.name, value as ModelCapability)} />
+                                <InputNumber size="small" className="w-24" min={0} precision={6} value={model.unitPrice} placeholder={t("config.channelEditor.unitPrice")} onChange={(unitPrice) => setPricing(model.name, { unitPrice: unitPrice && unitPrice > 0 ? unitPrice : undefined, priceUnit: model.priceUnit || "per_call" })} />
+                                <Select size="small" className="w-28" value={model.priceUnit || "per_call"} options={priceUnitOptions} onChange={(priceUnit) => setPricing(model.name, { unitPrice: model.unitPrice, priceUnit })} />
                                 <Button size="small" type={model.script ? "primary" : "default"} ghost={Boolean(model.script)} onClick={() => setScriptTarget({ name: model.name, capability: model.capability, value: model.script || "" })}>
                                     {t(model.script ? "config.channelEditor.scriptReady" : "config.channelEditor.script")}
                                 </Button>

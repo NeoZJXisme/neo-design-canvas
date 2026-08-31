@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
 import { requestVideoGeneration, storeGeneratedVideo } from "@/services/api/video";
-import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { defaultConfig, estimateModelCost, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile } from "@/services/file-storage";
 import { nanoid } from "nanoid";
@@ -78,6 +78,7 @@ import {
     type CanvasAssistantImage,
     type CanvasAssistantSession,
     type CanvasConnection,
+    type CanvasGenerationCostEntry,
     type CanvasNodeData,
     type CanvasNodeImage,
     type CanvasNodeText,
@@ -200,6 +201,7 @@ function InfiniteCanvasPage() {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [nodes, setNodes] = useState<CanvasNodeData[]>([]);
     const [connections, setConnections] = useState<CanvasConnection[]>([]);
+    const [generationCosts, setGenerationCosts] = useState<CanvasGenerationCostEntry[]>([]);
     const [chatSessions, setChatSessions] = useState<CanvasAssistantSession[]>([]);
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [viewport, setViewport] = useState<ViewportTransform>({ x: 0, y: 0, k: 1 });
@@ -266,6 +268,18 @@ function InfiniteCanvasPage() {
             showImageInfo,
         }),
         [activeChatId, backgroundMode, chatSessions, showImageInfo],
+    );
+
+    const recordGenerationCost = useCallback(
+        (nodeId: string, mode: CanvasNodeGenerationMode, model: string, usage: { callCount: number; outputCount: number; seconds?: number }) => {
+            const estimate = estimateModelCost(effectiveConfig, model, usage);
+            if (!estimate) return undefined;
+            const entry: CanvasGenerationCostEntry = { id: nanoid(), nodeId, mode, model: estimate.model, provider: estimate.provider, currency: estimate.currency, unitPrice: estimate.unitPrice, priceUnit: estimate.priceUnit, quantity: estimate.quantity, estimatedCost: estimate.total, createdAt: new Date().toISOString() };
+            setGenerationCosts((current) => [entry, ...current]);
+            setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, estimatedCost: estimate.total } } : node));
+            return estimate.total;
+        },
+        [effectiveConfig],
     );
 
     const cleanupCanvasFiles = useCallback(
@@ -344,6 +358,7 @@ function InfiniteCanvasPage() {
             const restoredSessions = await hydrateAssistantImages(project.chatSessions || []);
             setNodes(restoredNodes);
             setConnections(project.connections);
+            setGenerationCosts(project.generationCosts || []);
             setChatSessions(restoredSessions);
             setActiveChatId(project.activeChatId || null);
             setBackgroundMode(project.backgroundMode);
@@ -409,8 +424,8 @@ function InfiniteCanvasPage() {
 
     useEffect(() => {
         if (!projectLoaded || historyPausedRef.current) return;
-        updateProject(projectId, { nodes, connections, chatSessions, activeChatId, backgroundMode, showImageInfo });
-    }, [activeChatId, backgroundMode, chatSessions, connections, nodes, projectId, projectLoaded, showImageInfo, updateProject]);
+        updateProject(projectId, { nodes, connections, generationCosts, chatSessions, activeChatId, backgroundMode, showImageInfo });
+    }, [activeChatId, backgroundMode, chatSessions, connections, generationCosts, nodes, projectId, projectLoaded, showImageInfo, updateProject]);
 
     useEffect(() => {
         if (!dialogNodeId) setNodeImageSettingsOpen(false);
@@ -1542,6 +1557,27 @@ function InfiniteCanvasPage() {
         setNodes((prev) => prev.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, favorite: !node.metadata?.favorite } } : node));
     }, []);
 
+    const updateNodeCuration = useCallback((nodeId: string, patch: { rating?: number; designNotes?: string }) => {
+        setNodes((prev) => prev.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...patch } } : node));
+    }, []);
+
+    const selectNodeOutput = useCallback((nodeId: string) => {
+        setNodes((prev) => prev.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, favorite: true, workflowRole: "output" } } : node));
+        focusNode(nodeId);
+    }, [focusNode]);
+
+    const iterateNode = useCallback((nodeId: string) => {
+        const source = nodesRef.current.find((node) => node.id === nodeId);
+        if (!source) return;
+        const configNode = createNeoWorkflowNode("generation", { x: source.position.x + source.width + 96, y: source.position.y });
+        configNode.metadata = { ...configNode.metadata, model: effectiveConfig.imageModel || effectiveConfig.model, size: effectiveConfig.size, count: getGenerationCount(effectiveConfig.canvasImageCount || effectiveConfig.count) };
+        setNodes((prev) => [...prev, configNode]);
+        setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: source.id, toNodeId: configNode.id }]);
+        setSelectedNodeIds(new Set([configNode.id]));
+        setSelectedConnectionId(null);
+        setDialogNodeId(configNode.id);
+    }, [effectiveConfig.canvasImageCount, effectiveConfig.count, effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.size]);
+
     const toggleBatchExpanded = useCallback((nodeId: string) => {
         setExpandedBatchNodeIds((current) => {
             const next = new Set(current);
@@ -1865,7 +1901,7 @@ function InfiniteCanvasPage() {
                 setRunningNodeId(null);
             }
         },
-        [effectiveConfig, finishGenerationRequest, isAiConfigReady, message, openConfigDialog, startGenerationRequest, t],
+        [effectiveConfig, finishGenerationRequest, isAiConfigReady, message, openConfigDialog, recordGenerationCost, startGenerationRequest, t],
     );
 
     const upscaleImageNode = useCallback(async (node: CanvasNodeData, params: CanvasImageUpscaleParams) => {
@@ -2193,6 +2229,8 @@ function InfiniteCanvasPage() {
                 setRunningNodeId(null);
                 return;
             }
+            const outputCount = mode === "image" ? getGenerationCount(generationConfig.count) : mode === "text" ? getGenerationCount(String(sourceNode?.metadata?.textCount || 1)) : 1;
+            const estimatedCost = recordGenerationCost(nodeId, mode, generationConfig.model, { callCount: outputCount, outputCount, seconds: mode === "video" ? Number(generationConfig.videoSeconds) || 0 : undefined });
             let pendingChildIds: string[] = [];
             if (markSourceStatus) setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...(node.type === CanvasNodeType.Config ? {} : { prompt }), status: NODE_STATUS_LOADING, errorDetails: undefined } } : node)));
 
@@ -2228,6 +2266,8 @@ function InfiniteCanvasPage() {
                         metadata: {
                             prompt: effectivePrompt,
                             status: NODE_STATUS_LOADING,
+                            workflowRole: "output",
+                            ...(estimatedCost ? { estimatedCost } : {}),
                             images: imageIds.map((id) => ({ id, status: NODE_STATUS_LOADING, content: "", naturalWidth: 0, naturalHeight: 0, bytes: 0, mimeType: "" })),
                             ...generationMetadata,
                         },
@@ -2261,7 +2301,7 @@ function InfiniteCanvasPage() {
                                               title: prompt.slice(0, 32) || "Prompt",
                                               width: parentConfig.width,
                                               height: parentConfig.height,
-                                              metadata: { ...node.metadata, content: prompt, prompt, status: NODE_STATUS_SUCCESS, fontSize: 14, errorDetails: undefined },
+                                              metadata: { ...node.metadata, content: prompt, prompt, status: NODE_STATUS_SUCCESS, fontSize: 14, workflowRole: node.metadata?.workflowRole || "prompt", errorDetails: undefined },
                                           }
                                 : node,
                         ),
@@ -2357,6 +2397,8 @@ function InfiniteCanvasPage() {
                         metadata: {
                             prompt: effectivePrompt,
                             status: NODE_STATUS_LOADING,
+                            workflowRole: "output",
+                            ...(estimatedCost ? { estimatedCost } : {}),
                             model: generationConfig.model,
                             size: generationConfig.size,
                             seconds: generationConfig.videoSeconds,
@@ -2421,7 +2463,7 @@ function InfiniteCanvasPage() {
                         position: isEmptyAudioNode ? sourceNode.position : { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y + ((sourceNode?.height || spec.height) - spec.height) / 2 },
                         width: isEmptyAudioNode ? sourceNode.width : spec.width,
                         height: isEmptyAudioNode ? sourceNode.height : spec.height,
-                        metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, ...buildAudioGenerationMetadata(generationConfig) },
+                        metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, workflowRole: "output", ...(estimatedCost ? { estimatedCost } : {}), ...buildAudioGenerationMetadata(generationConfig) },
                     };
                     pendingChildIds = [audioId];
                     setNodes((prev) =>
@@ -2458,6 +2500,8 @@ function InfiniteCanvasPage() {
                     metadata: {
                         prompt: effectivePrompt,
                         status: NODE_STATUS_LOADING,
+                        workflowRole: "output",
+                        ...(estimatedCost ? { estimatedCost } : {}),
                         fontSize: 14,
                         model: generationConfig.model,
                         reasoningEffort: generationConfig.reasoningEffort,
@@ -2566,7 +2610,7 @@ function InfiniteCanvasPage() {
                 setRunningNodeId(null);
             }
         },
-        [effectiveConfig, finishGenerationRequest, isAiConfigReady, message, openConfigDialog, startGenerationRequest, t],
+        [effectiveConfig, finishGenerationRequest, isAiConfigReady, message, openConfigDialog, recordGenerationCost, startGenerationRequest, t],
     );
     useEffect(() => {
         generateNodeRef.current = handleGenerateNode;
@@ -2609,6 +2653,8 @@ function InfiniteCanvasPage() {
                 return;
             }
             const retryImages = retryReferenceImages || [];
+            const retryMode: CanvasNodeGenerationMode = node.type === CanvasNodeType.Text ? "text" : node.type === CanvasNodeType.Video ? "video" : node.type === CanvasNodeType.Audio ? "audio" : "image";
+            recordGenerationCost(node.id, retryMode, generationConfig.model, { callCount: 1, outputCount: 1, seconds: retryMode === "video" ? Number(generationConfig.videoSeconds) || 0 : undefined });
 
             setRunningNodeId(node.id);
             setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_LOADING, errorDetails: undefined, images: item.metadata?.images?.map((image) => (image.id === imageId ? { ...image, status: NODE_STATUS_LOADING, errorDetails: undefined } : image)) } } : item)));
@@ -2937,7 +2983,7 @@ function InfiniteCanvasPage() {
 
     return (
         <main className="flex h-full min-h-0 overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
-            <CanvasSidePanel nodes={nodes} selectedNodeIds={selectedNodeIds} onFocusNode={focusNode} onPreviewNode={setPreviewNodeId} onInsertAsset={handleAssetInsert} onCreateWorkflowNode={createWorkflowNode} />
+            <CanvasSidePanel nodes={nodes} selectedNodeIds={selectedNodeIds} onFocusNode={focusNode} onPreviewNode={setPreviewNodeId} onInsertAsset={handleAssetInsert} onCreateWorkflowNode={createWorkflowNode} generationCosts={generationCosts} onUpdateNodeCuration={updateNodeCuration} onIterateNode={iterateNode} onSelectOutput={selectNodeOutput} />
             <section className="relative min-w-0 flex-1 overflow-hidden">
                 <CanvasTopBar
                     title={currentProject?.title || t("canvas.projectPage.untitledCanvas")}

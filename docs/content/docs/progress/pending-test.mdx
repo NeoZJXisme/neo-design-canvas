@@ -7,6 +7,10 @@ description: Implemented changes that still need manual verification
 
 The current release needs manual verification in these areas:
 
+- Neo Canvas curation loop: edit a favorite node to set a one-to-five-star rating and design notes, confirm the values persist, use Iterate to create and connect a Generate configuration to its right, and use Select output to retain the favorite while changing its `workflowRole` to `output`.
+- Workflow-role inheritance and cost ledger: image, text, video, and audio generation results should carry `workflowRole: output`; configured provider/model pricing should add one estimated-cost entry per actual canvas generation or retry, preserve it with the canvas project, and summarize totals by currency in Jobs. Models without a positive unit price must not add ledger entries or affect generation behavior.
+- Channel pricing: provider name, billing currency, model unit price, and per-call/per-output/per-second unit should persist through the existing channel editor and configuration export/import without changing model routing or request scripts.
+
 - Neo Canvas workflow shell: the Canvas tab should create Reference, Prompt, Generate, and Selected Output nodes through the existing Image, Text, Config, and Group primitives with the expected `workflowRole`; no new node type should appear. Favoriting any supported node from its hover toolbar should immediately add or remove it from Favorites, where title, type, rating, and notes are shown and clicking the row focuses the node. Jobs should summarize generation-role or active/completed/failed generation nodes and reuse the same focus behavior without changing batch concurrency.
 - Creative Director branding: the canvas top bar, connection status, and right-panel heading and placeholder should display Creative Director / 创意总监 while connection settings, Codex model controls, local Agent transport, protocol, stores, and event behavior remain unchanged.
 

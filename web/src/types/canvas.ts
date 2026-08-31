@@ -30,6 +30,20 @@ export type CanvasImageGenerationType = "generation" | "edit";
 // duplicating the existing generation, reference, export, and Agent logic.
 export type CanvasWorkflowRole = "reference" | "prompt" | "generation" | "output";
 
+export type CanvasGenerationCostEntry = {
+    id: string;
+    nodeId: string;
+    mode: CanvasGenerationMode;
+    model: string;
+    provider: string;
+    currency: string;
+    unitPrice: number;
+    priceUnit: "per_call" | "per_output" | "per_second";
+    quantity: number;
+    estimatedCost: number;
+    createdAt: string;
+};
+
 export type CanvasNodeImage = {
     id: string;
     status: CanvasNodeStatus;

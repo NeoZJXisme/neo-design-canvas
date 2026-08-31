@@ -265,7 +265,7 @@ export default {
             searchPrompts: "Search prompts", noPrompts: "No prompts", promptCopied: "Prompt copied", copyFailed: "Copy failed", loadFailedRetry: "Load failed. Click to retry.", noMatchingPrompts: "No matching prompts", sourceEmpty: "No prompts from this source", viewDetails: "View details",
             filter: { image: "Image", video: "Video", text: "Text", audio: "Audio", config: "Configuration", group: "Group" },
             workflow: { title: "Design workflow", reference: "Reference", prompt: "Prompt", generation: "Generate", output: "Output" },
-            rating: "Rating", noNotes: "No notes", noFavorites: "No favorite nodes yet", noJobs: "No generation jobs",
+            rating: "Rating", designNotes: "Design notes", noNotes: "No notes", notesPlaceholder: "Record strengths, issues, or the direction for the next iteration", editCuration: "Edit", iterate: "Iterate", selectOutput: "Select output", noFavorites: "No favorite nodes yet", noJobs: "No generation jobs", estimatedCost: "Project estimated cost", noCostData: "Configure model pricing to display",
             jobStatus: { loading: "Running", error: "Failed", success: "Completed", idle: "Ready" },
         },
         assetPicker: { title: "Select assets", insert: "Insert", search: "Search assets", empty: "No assets" },
@@ -486,6 +486,9 @@ export default {
         channelEditor: {
             title: "Edit provider",
             name: "Provider name",
+            provider: "Provider",
+            providerPlaceholder: "For example, OpenAI, Google, or Volcengine",
+            currency: "Billing currency",
             protocol: "Protocol",
             baseUrl: "API endpoint",
             models: "Provider models",
@@ -493,6 +496,8 @@ export default {
             selectModels: "Select models",
             scriptReady: "Script set",
             script: "Request script",
+            unitPrice: "Unit price",
+            priceUnits: { per_call: "Per call", per_output: "Per output", per_second: "Per second" },
             empty: "Select models to fetch or manually add models.",
             capabilities: {
                 image: "Image",

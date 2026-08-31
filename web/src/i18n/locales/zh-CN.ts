@@ -265,7 +265,7 @@ export default {
             searchPrompts: "搜索提示词", noPrompts: "暂无提示词", promptCopied: "已复制提示词", copyFailed: "复制失败", loadFailedRetry: "加载失败，点击重试", noMatchingPrompts: "无匹配提示词", sourceEmpty: "该来源暂无提示词", viewDetails: "查看详情",
             filter: { image: "图片", video: "视频", text: "文本", audio: "音频", config: "配置", group: "分组" },
             workflow: { title: "设计工作流", reference: "参考", prompt: "提示词", generation: "生成", output: "输出" },
-            rating: "评分", noNotes: "暂无备注", noFavorites: "还没有收藏节点", noJobs: "暂无生成任务",
+            rating: "评分", designNotes: "设计备注", noNotes: "暂无备注", notesPlaceholder: "记录方案亮点、问题或下一轮方向", editCuration: "编辑", iterate: "继续迭代", selectOutput: "选为输出", noFavorites: "还没有收藏节点", noJobs: "暂无生成任务", estimatedCost: "项目预估成本", noCostData: "配置模型单价后显示",
             jobStatus: { loading: "生成中", error: "失败", success: "完成", idle: "待配置" },
         },
         assetPicker: { title: "选择资产", insert: "插入", search: "搜索资产", empty: "没有资产" },
@@ -486,6 +486,9 @@ export default {
         channelEditor: {
             title: "编辑渠道",
             name: "渠道名称",
+            provider: "供应商",
+            providerPlaceholder: "例如 OpenAI、Google、火山引擎",
+            currency: "计价币种",
             protocol: "协议",
             baseUrl: "接口地址",
             models: "渠道模型",
@@ -493,6 +496,8 @@ export default {
             selectModels: "选择模型",
             scriptReady: "脚本已设",
             script: "调用脚本",
+            unitPrice: "单价",
+            priceUnits: { per_call: "每次调用", per_output: "每个结果", per_second: "每秒" },
             empty: "点击「选择模型」拉取或手动增加模型。",
             capabilities: {
                 image: "生图",
