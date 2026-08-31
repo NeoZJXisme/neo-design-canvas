@@ -16,7 +16,7 @@ let ownsAgentProcess = false;
 let shuttingDown = false;
 
 function logFilePath() {
-  return path.join(app.getPath("userData"), "logs", "desktop.log");
+  return process.env.NEO_CANVAS_LOG_FILE || path.join(app.getPath("userData"), "logs", "desktop.log");
 }
 
 function writeLog(message) {
@@ -264,6 +264,11 @@ async function createMainWindow(webUrl, agent) {
   const bootstrap = new URLSearchParams({ agentUrl: agent.url, agentToken: agent.token }).toString();
   await window.loadURL(`${webUrl}/#${bootstrap}`);
   writeLog("Main window loaded");
+
+  if (process.env.NEO_CANVAS_SMOKE_TEST === "1") {
+    writeLog("Desktop smoke test passed");
+    setTimeout(() => app.quit(), 1000);
+  }
 }
 
 async function bootstrap() {
