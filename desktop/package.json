@@ -1,6 +1,6 @@
 {
   "name": "neo-canvas-desktop",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Neo Canvas desktop shell for Windows",
   "main": "main.cjs",
@@ -23,6 +23,7 @@
     },
     "files": [
       "main.cjs",
+      "preload.cjs",
       "package.json"
     ],
     "extraResources": [
@@ -49,6 +50,14 @@
       {
         "from": "../canvas-agent/README.md",
         "to": "canvas-agent/README.md"
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": "NZX",
+        "name": "Neo Canvas Project",
+        "description": "Neo Canvas portable project",
+        "role": "Editor"
       }
     ],
     "win": {
