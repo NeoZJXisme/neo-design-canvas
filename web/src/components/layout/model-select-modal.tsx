@@ -1,4 +1,4 @@
-import { App, Button, Checkbox, Input, Modal, Tabs, Tag } from "antd";
+import { App, Button, Checkbox, Input, Modal, Tabs } from "antd";
 import { RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -147,8 +147,8 @@ export function ModelSelectModal({ open, channel, selectedNames, onConfirm, onCl
                             <Checkbox key={name} checked={selected.has(name)} onChange={(event) => toggle(name, event.target.checked)} className="min-w-0 rounded-md px-2 py-1.5 hover:bg-stone-50 dark:hover:bg-stone-900/40">
                                 <span className="flex min-w-0 items-center gap-2">
                                     <span className="min-w-0 flex-1 truncate" title={name}>{name}</span>
-                                    <Tag bordered={false} className="m-0 shrink-0 text-[10px]">{provider.label}</Tag>
-                                    <Tag bordered={false} className="m-0 shrink-0 text-[10px]">{capability}</Tag>
+                                    <span className="m-0 shrink-0 rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] leading-none text-stone-500 dark:bg-stone-800 dark:text-stone-400">{provider.label}</span>
+                                    <span className="m-0 shrink-0 rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] leading-none text-stone-500 dark:bg-stone-800 dark:text-stone-400">{capability}</span>
                                 </span>
                             </Checkbox>
                         );
