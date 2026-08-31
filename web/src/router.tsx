@@ -1,6 +1,7 @@
 import { createBrowserRouter, Outlet } from "react-router-dom";
 
 import { AnalyticsTracker } from "@/components/layout/analytics-tracker";
+import { NzxOpenBridge } from "@/components/canvas/nzx-open-bridge";
 import UserLayout from "@/layouts/user-layout";
 import AssetsPage from "@/pages/assets";
 import CanvasPage from "@/pages/canvas";
@@ -17,6 +18,7 @@ export const router = createBrowserRouter([
         element: (
             <UserLayout>
                 <AnalyticsTracker />
+                <NzxOpenBridge />
                 <Outlet />
             </UserLayout>
         ),
