@@ -16,7 +16,7 @@ declare global {
     interface Window {
         neoDesktop?: {
             isDesktop: true;
-            saveNzx: (payload: { bytes: Uint8Array | ArrayBuffer; suggestedName: string; saveAs?: boolean }) => Promise<NeoNzxSaveResult>;
+            saveNzx: (payload: { bytes: Uint8Array | ArrayBuffer; suggestedName: string; path?: string; saveAs?: boolean }) => Promise<NeoNzxSaveResult>;
             openNzxDialog: () => Promise<NeoNzxPayload | null>;
             takePendingNzx: () => Promise<NeoNzxPayload | null>;
             onOpenNzx: (listener: (payload: NeoNzxPayload) => void) => () => void;
