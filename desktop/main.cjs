@@ -1,13 +1,16 @@
 const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
 const { spawn, spawnSync } = require("node:child_process");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const http = require("node:http");
+const https = require("node:https");
 const os = require("node:os");
 const path = require("node:path");
 
 const APP_ID = "com.neozjx.neo.canvas";
 const AGENT_START_TIMEOUT_MS = 20000;
 const AGENT_CONFIG_FILE = path.join(os.homedir(), ".infinite-canvas", "canvas-agent.json");
+const API_PROXY_PATH = "/__neo_api_proxy__";
 
 let mainWindow = null;
 let webServer = null;
@@ -53,7 +56,68 @@ function contentType(filePath) {
   }
 }
 
-function startWebServer() {
+function proxyRequestHeaders(headers) {
+  const result = {};
+  const blocked = new Set(["host", "origin", "referer", "connection", "proxy-connection", "cookie"]);
+  for (const [name, value] of Object.entries(headers || {})) {
+    const lower = name.toLowerCase();
+    if (blocked.has(lower) || lower.startsWith("sec-") || value == null) continue;
+    result[name] = value;
+  }
+  return result;
+}
+
+function proxyResponseHeaders(headers) {
+  const result = {};
+  const blocked = new Set(["connection", "transfer-encoding", "set-cookie"]);
+  for (const [name, value] of Object.entries(headers || {})) {
+    if (blocked.has(name.toLowerCase()) || value == null) continue;
+    result[name] = value;
+  }
+  return result;
+}
+
+function proxyExternalRequest(req, res, targetValue) {
+  let target;
+  try {
+    target = new URL(targetValue);
+  } catch {
+    res.writeHead(400).end("Invalid proxy target");
+    return;
+  }
+  if (target.protocol !== "http:" && target.protocol !== "https:") {
+    res.writeHead(400).end("Unsupported proxy protocol");
+    return;
+  }
+
+  const client = target.protocol === "https:" ? https : http;
+  const upstream = client.request(
+    target,
+    {
+      method: req.method || "GET",
+      headers: proxyRequestHeaders(req.headers),
+    },
+    (upstreamResponse) => {
+      res.writeHead(upstreamResponse.statusCode || 502, proxyResponseHeaders(upstreamResponse.headers));
+      upstreamResponse.on("error", (error) => {
+        writeLog(`API proxy response failed: ${error.stack || error}`);
+        if (!res.destroyed) res.destroy(error);
+      });
+      upstreamResponse.pipe(res);
+    },
+  );
+
+  upstream.setTimeout(10 * 60_000, () => upstream.destroy(new Error("API proxy request timed out")));
+  upstream.on("error", (error) => {
+    writeLog(`API proxy request failed: ${target.origin}${target.pathname}: ${error.stack || error}`);
+    if (!res.headersSent) res.writeHead(502, { "Content-Type": "application/json; charset=utf-8" });
+    if (!res.writableEnded) res.end(JSON.stringify({ error: { message: error.message || "API proxy request failed" } }));
+  });
+  req.on("aborted", () => upstream.destroy());
+  req.pipe(upstream);
+}
+
+function startWebServer(proxyToken) {
   const rootDir = resourcePath("web-dist");
   const indexFile = path.join(rootDir, "index.html");
   if (!fs.existsSync(indexFile)) throw new Error(`Web build not found: ${indexFile}`);
@@ -63,6 +127,16 @@ function startWebServer() {
     const server = http.createServer((req, res) => {
       try {
         const requestUrl = new URL(req.url || "/", "http://127.0.0.1");
+        if (requestUrl.pathname === API_PROXY_PATH) {
+          if (requestUrl.searchParams.get("token") !== proxyToken) {
+            res.writeHead(403).end("Forbidden");
+            return;
+          }
+          const target = requestUrl.searchParams.get("target") || "";
+          proxyExternalRequest(req, res, target);
+          return;
+        }
+
         const relativePath = decodeURIComponent(requestUrl.pathname).replace(/^\/+/, "") || "index.html";
         let filePath = path.resolve(root, relativePath);
         if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
@@ -236,7 +310,7 @@ function stopWebServer() {
   webServer = null;
 }
 
-async function createMainWindow(webUrl, agent) {
+async function createMainWindow(webUrl, agent, proxyToken) {
   const window = new BrowserWindow({
     width: 1600,
     height: 1000,
@@ -262,7 +336,10 @@ async function createMainWindow(webUrl, agent) {
   window.on("closed", () => { if (mainWindow === window) mainWindow = null; });
 
   const bootstrap = new URLSearchParams({ agentUrl: agent.url, agentToken: agent.token }).toString();
-  await window.loadURL(`${webUrl}/#${bootstrap}`);
+  const pageUrl = new URL(webUrl);
+  if (proxyToken) pageUrl.searchParams.set("neoDesktopProxy", proxyToken);
+  pageUrl.hash = bootstrap;
+  await window.loadURL(pageUrl.toString());
   writeLog("Main window loaded");
 
   if (process.env.NEO_CANVAS_SMOKE_TEST === "1") {
@@ -276,9 +353,11 @@ async function bootstrap() {
   Menu.setApplicationMenu(null);
   if (process.platform === "win32") app.setAppUserModelId(APP_ID);
 
-  const webUrl = process.env.NEO_CANVAS_DEV_URL || await startWebServer();
+  const devUrl = process.env.NEO_CANVAS_DEV_URL || "";
+  const proxyToken = devUrl ? "" : crypto.randomBytes(24).toString("hex");
+  const webUrl = devUrl || await startWebServer(proxyToken);
   const agent = await startAgent();
-  await createMainWindow(webUrl, agent);
+  await createMainWindow(webUrl, agent, proxyToken);
 }
 
 const hasLock = app.requestSingleInstanceLock();
@@ -294,7 +373,7 @@ if (!hasLock) {
   app.whenReady().then(bootstrap).catch((error) => {
     const detail = `${error instanceof Error ? error.message : String(error)}\n\n日志：${logFilePath()}`;
     writeLog(`Fatal startup error: ${error && error.stack ? error.stack : error}`);
-    dialog.showErrorBox("Neo Canvas 启动失败", detail);
+    if (process.env.NEO_CANVAS_SMOKE_TEST !== "1") dialog.showErrorBox("Neo Canvas 启动失败", detail);
     app.quit();
   });
 
