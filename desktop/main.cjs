@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
+const { app, BrowserWindow, Menu, dialog, shell, ipcMain } = require("electron");
 const { spawn, spawnSync } = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -11,12 +11,15 @@ const APP_ID = "com.neozjx.neo.canvas";
 const AGENT_START_TIMEOUT_MS = 20000;
 const AGENT_CONFIG_FILE = path.join(os.homedir(), ".infinite-canvas", "canvas-agent.json");
 const API_PROXY_PATH = "/__neo_api_proxy__";
+const NZX_FILTER = { name: "Neo Canvas Project", extensions: ["NZX", "nzx"] };
 
 let mainWindow = null;
 let webServer = null;
 let agentProcess = null;
 let ownsAgentProcess = false;
 let shuttingDown = false;
+let currentNzxPath = "";
+let pendingNzxPath = findNzxPath(process.argv);
 
 function logFilePath() {
   return process.env.NEO_CANVAS_LOG_FILE || path.join(app.getPath("userData"), "logs", "desktop.log");
@@ -35,6 +38,98 @@ function writeLog(message) {
 function resourcePath(...parts) {
   return app.isPackaged ? path.join(process.resourcesPath, ...parts) : path.join(__dirname, "..", ...parts);
 }
+
+function isNzxPath(value) {
+  return typeof value === "string" && /\.nzx$/i.test(value.trim());
+}
+
+function findNzxPath(args) {
+  return (args || []).find((value) => isNzxPath(value) && fs.existsSync(value)) || "";
+}
+
+function nzxPayload(filePath) {
+  return {
+    path: filePath,
+    fileName: path.basename(filePath),
+    bytes: fs.readFileSync(filePath),
+  };
+}
+
+function ipcBytesToBuffer(value) {
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof Uint8Array) return Buffer.from(value);
+  if (value instanceof ArrayBuffer) return Buffer.from(new Uint8Array(value));
+  if (value && value.type === "Buffer" && Array.isArray(value.data)) return Buffer.from(value.data);
+  throw new Error("Invalid NZX file payload");
+}
+
+async function chooseNzxSavePath(suggestedName) {
+  const safeName = String(suggestedName || "Neo Canvas Project.NZX").replace(/[\\/:*?"<>|]/g, "_");
+  const defaultPath = path.join(app.getPath("documents"), /\.nzx$/i.test(safeName) ? safeName : `${safeName}.NZX`);
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: "保存 Neo Canvas 项目",
+    defaultPath,
+    filters: [NZX_FILTER],
+    properties: ["showOverwriteConfirmation", "createDirectory"],
+  });
+  return result.canceled ? "" : result.filePath || "";
+}
+
+async function openNzxDialog() {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "打开 Neo Canvas 项目",
+    filters: [NZX_FILTER],
+    properties: ["openFile"],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  const filePath = result.filePaths[0];
+  currentNzxPath = filePath;
+  return nzxPayload(filePath);
+}
+
+function sendNzxOpen(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return;
+  currentNzxPath = filePath;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    pendingNzxPath = filePath;
+    return;
+  }
+  try {
+    mainWindow.webContents.send("nzx:open-file", nzxPayload(filePath));
+  } catch (error) {
+    pendingNzxPath = filePath;
+    writeLog(`Failed to dispatch NZX open: ${error.stack || error}`);
+  }
+}
+
+ipcMain.handle("nzx:save", async (_event, payload = {}) => {
+  try {
+    let targetPath = payload.saveAs ? "" : currentNzxPath;
+    if (!targetPath) targetPath = await chooseNzxSavePath(payload.suggestedName);
+    if (!targetPath) return { canceled: true };
+    if (!/\.nzx$/i.test(targetPath)) targetPath += ".NZX";
+    fs.writeFileSync(targetPath, ipcBytesToBuffer(payload.bytes));
+    currentNzxPath = targetPath;
+    writeLog(`NZX project saved: ${targetPath}`);
+    return { canceled: false, path: targetPath, fileName: path.basename(targetPath) };
+  } catch (error) {
+    writeLog(`NZX project save failed: ${error.stack || error}`);
+    throw error;
+  }
+});
+
+ipcMain.handle("nzx:open-dialog", () => openNzxDialog());
+ipcMain.handle("nzx:take-pending", () => {
+  if (!pendingNzxPath || !fs.existsSync(pendingNzxPath)) return null;
+  const filePath = pendingNzxPath;
+  pendingNzxPath = "";
+  currentNzxPath = filePath;
+  return nzxPayload(filePath);
+});
+ipcMain.handle("nzx:clear-path", () => {
+  currentNzxPath = "";
+  return true;
+});
 
 function contentType(filePath) {
   switch (path.extname(filePath).toLowerCase()) {
@@ -320,6 +415,7 @@ async function createMainWindow(webUrl, agent, proxyToken) {
     backgroundColor: "#111111",
     title: "Neo Canvas",
     webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -364,10 +460,20 @@ const hasLock = app.requestSingleInstanceLock();
 if (!hasLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
+  app.on("second-instance", (_event, commandLine) => {
+    const nzxPath = findNzxPath(commandLine);
+    if (nzxPath) sendNzxOpen(nzxPath);
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
     mainWindow.focus();
+  });
+
+  app.on("open-file", (event, filePath) => {
+    if (!isNzxPath(filePath)) return;
+    event.preventDefault();
+    if (app.isReady()) sendNzxOpen(filePath);
+    else pendingNzxPath = filePath;
   });
 
   app.whenReady().then(bootstrap).catch((error) => {
