@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: neo-canvas-desktop-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows-installer:
     name: Build Windows installer
@@ -115,7 +119,7 @@ jobs:
       - name: Generate SHA-256
         shell: pwsh
         run: |
-          $installer = Get-ChildItem "desktop/dist/Neo-Canvas-Setup-0.1.0.exe" | Select-Object -First 1
+          $installer = Get-ChildItem "desktop/dist/Neo-Canvas-Setup-0.1.1.exe" | Select-Object -First 1
           if (-not $installer) { throw "Neo Canvas installer was not generated." }
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash *$($installer.Name)" | Set-Content -Encoding ascii "$($installer.FullName).sha256"
@@ -125,10 +129,10 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: neo-canvas-windows-v0.1.0
+          name: neo-canvas-windows-v0.1.1
           path: |
-            desktop/dist/Neo-Canvas-Setup-0.1.0.exe
-            desktop/dist/Neo-Canvas-Setup-0.1.0.exe.sha256
+            desktop/dist/Neo-Canvas-Setup-0.1.1.exe
+            desktop/dist/Neo-Canvas-Setup-0.1.1.exe.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
