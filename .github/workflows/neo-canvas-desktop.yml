@@ -43,7 +43,7 @@ jobs:
         shell: pwsh
         run: |
           $rollupVersion = node -p "require('./node_modules/rollup/package.json').version"
-          npm install --no-save --package-lock=false --legacy-peer-deps "@rollup/rollup-win32-x64-msvc@$rollupVersion" "@ant-design/icons-svg@4.5.0"
+          npm install --no-save --package-lock=false --legacy-peer-deps "@rollup/rollup-win32-x64-msvc@$rollupVersion" "@ant-design/icons@6.1.1" "@ant-design/icons-svg@4.4.2"
 
       - name: Typecheck web
         working-directory: web
