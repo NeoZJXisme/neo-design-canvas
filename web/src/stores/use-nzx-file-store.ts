@@ -24,8 +24,13 @@ export const useNzxFileStore = create<NzxFileStore>((set, get) => ({
     savedUpdatedAt: "",
     status: "autosaved",
     setProject: (projectId) => {
-        if (!projectId) return set({ projectId: "", path: "", savedUpdatedAt: "", status: "autosaved" });
-        if (get().projectId === projectId) return;
+        const previousProjectId = get().projectId;
+        if (!projectId) {
+            if (previousProjectId) void window.neoDesktop?.clearNzxPath();
+            return set({ projectId: "", path: "", savedUpdatedAt: "", status: "autosaved" });
+        }
+        if (previousProjectId === projectId) return;
+        if (previousProjectId) void window.neoDesktop?.clearNzxPath();
         const path = sessionStorage.getItem(pathKey(projectId)) || "";
         const savedUpdatedAt = sessionStorage.getItem(savedAtKey(projectId)) || "";
         set({ projectId, path, savedUpdatedAt, status: path ? "saved" : "autosaved" });
@@ -43,6 +48,7 @@ export const useNzxFileStore = create<NzxFileStore>((set, get) => ({
             sessionStorage.removeItem(pathKey(projectId));
             sessionStorage.removeItem(savedAtKey(projectId));
         }
+        void window.neoDesktop?.clearNzxPath();
         set({ projectId, path: "", savedUpdatedAt: "", status: "autosaved" });
     },
 }));
