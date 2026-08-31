@@ -3,7 +3,7 @@ import { ListPlus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { fetchChannelModels } from "@/services/api/image";
+import { pingChannel } from "@/services/api/channel-api";
 import { defaultBaseUrlForApiFormat, guessCapability, normalizeChannelModels, type ApiCallFormat, type ChannelModel, type ModelCapability, type ModelChannel, type ModelPriceUnit, type PriceCurrency } from "@/stores/use-config-store";
 import { ModelScriptEditor } from "./model-script-editor";
 import { ModelSelectModal } from "./model-select-modal";
@@ -68,12 +68,10 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
         }
         setTesting(true);
         setPingResult(null);
-        const startedAt = performance.now();
         try {
-            const models = await fetchChannelModels(draft);
-            const latency = Math.max(1, Math.round(performance.now() - startedAt));
-            setPingResult({ latency, modelCount: models.length });
-            message.success(`API OK · ${latency} ms · ${models.length} models`);
+            const result = await pingChannel(draft);
+            setPingResult({ latency: result.latency, modelCount: result.models.length });
+            message.success(`API OK · ${result.latency} ms · ${result.models.length} models`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "API connection failed");
         } finally {
