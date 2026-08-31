@@ -1,6 +1,21 @@
 import axios from "axios";
 
-import { buildApiUrl, type ModelChannel } from "@/stores/use-config-store";
+import { buildApiUrl, guessCapability, type ModelCapability, type ModelChannel } from "@/stores/use-config-store";
+
+const CREATIVE_IMAGE_KEYWORDS = [
+    "banana",
+    "qwen-image",
+    "qwen_image",
+    "wan-image",
+    "wan_image",
+    "ideogram",
+    "recraft",
+    "firefly",
+    "kolors",
+    "hidream",
+    "jimeng",
+    "doubao-image",
+];
 
 function modelName(value: unknown) {
     if (typeof value === "string") return value.trim();
@@ -41,6 +56,12 @@ function geminiModelsUrl(baseUrl: string) {
     const lower = normalized.toLowerCase();
     const root = lower.endsWith("/v1") || lower.endsWith("/v1beta") ? normalized : `${normalized}/v1beta`;
     return `${root}/models`;
+}
+
+export function guessCompatibleCapability(name: string): ModelCapability {
+    const value = name.toLowerCase();
+    if (CREATIVE_IMAGE_KEYWORDS.some((keyword) => value.includes(keyword))) return "image";
+    return guessCapability(name);
 }
 
 export async function fetchCompatibleChannelModels(channel: ModelChannel) {
