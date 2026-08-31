@@ -38,12 +38,12 @@ jobs:
         working-directory: web
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Install matching Rollup Windows native package
+      - name: Install matching Windows native packages
         working-directory: web
         shell: pwsh
         run: |
           $rollupVersion = node -p "require('./node_modules/rollup/package.json').version"
-          npm install --no-save --package-lock=false --legacy-peer-deps "@rollup/rollup-win32-x64-msvc@$rollupVersion"
+          npm install --no-save --package-lock=false --legacy-peer-deps "@rollup/rollup-win32-x64-msvc@$rollupVersion" "@ant-design/icons-svg@4.5.0"
 
       - name: Typecheck web
         working-directory: web
