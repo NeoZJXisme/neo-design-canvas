@@ -6,6 +6,7 @@ import { dataUrlToFile } from "@/lib/image-utils";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { imageToDataUrl } from "@/services/image-storage";
 import { boolConfig, buildApiUrl, modelOptionName, resolveModelRequestConfig, resolveModelScript, type AiConfig } from "@/stores/use-config-store";
+import { createApilioVideoTask, pollApilioVideoTask, resolveApilioAdapter, type ApilioVideoAdapterId } from "./apilio-adapter-registry";
 import { runModelPlugin } from "./model-plugin";
 import type { ReferenceImage } from "@/types/image";
 
@@ -16,7 +17,13 @@ type RequestOptions = { signal?: AbortSignal };
 const apiText = (key: string, options?: Record<string, unknown>) => i18n.t(`apiErrors.${key}`, options);
 
 export type VideoGenerationResult = { blob?: Blob; url?: string; mimeType?: string };
-export type VideoGenerationTask = { id: string; provider: "openai" | "plugin"; model: string };
+export type VideoGenerationTask = {
+    id: string;
+    provider: "openai" | "plugin" | "apilio";
+    model: string;
+    adapter?: ApilioVideoAdapterId;
+    mode?: "text" | "image";
+};
 export type VideoGenerationTaskState = { status: "pending" } | { status: "completed"; result: VideoGenerationResult } | { status: "failed"; error: string };
 
 /** Results for scripted (plugin) video models, which run their own create+poll in one shot at task creation. */
@@ -52,6 +59,30 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
     const script = resolveModelScript(config, selectedModel);
     if (script) return createPluginVideoTask(requestConfig, selectedModel, script, prompt, references, options);
     assertVideoConfig(requestConfig, requestConfig.model);
+
+    const adapter = resolveApilioAdapter(requestConfig.baseUrl, requestConfig.model, "video");
+    if (adapter === "apilio-unified-video" || adapter === "apilio-kling-video") {
+        const refs = await Promise.all(references.map((image) => imageToDataUrl(image)));
+        try {
+            const task = await createApilioVideoTask(
+                requestConfig,
+                adapter,
+                prompt,
+                refs,
+                {
+                    seconds: normalizeVideoSeconds(config.videoSeconds),
+                    ratio: config.size,
+                    resolution: normalizeVideoResolution(config.vquality),
+                    watermark: boolConfig(config.videoWatermark, false),
+                },
+                options,
+            );
+            return { ...task, provider: "apilio", model: selectedModel };
+        } catch (error) {
+            throw new Error(readAxiosError(error, apiText("videoTaskCreateFailed")));
+        }
+    }
+
     return createOpenAIVideoTask(requestConfig, selectedModel, prompt, references, options);
 }
 
@@ -62,6 +93,14 @@ export async function pollVideoGenerationTask(config: AiConfig, task: VideoGener
     }
     const requestConfig = resolveModelRequestConfig(config, task.model);
     assertVideoConfig(requestConfig, requestConfig.model);
+    if (task.provider === "apilio") {
+        if (!task.adapter) return { status: "failed", error: "Apilio adapter metadata is missing." };
+        try {
+            return await pollApilioVideoTask(requestConfig, { id: task.id, adapter: task.adapter, mode: task.mode }, options);
+        } catch (error) {
+            throw new Error(readAxiosError(error, apiText("videoTaskQueryFailed")));
+        }
+    }
     return pollOpenAIVideoTask(requestConfig, task, options);
 }
 
@@ -222,18 +261,8 @@ function readApiErrorMessage(value: unknown): string {
     }
     if (typeof value !== "object") return "";
     const payload = value as { msg?: unknown; message?: unknown; error?: unknown; detail?: unknown };
-    // error may be a string or an object containing a message.
-    const errorMsg =
-        typeof payload.error === "string"
-            ? payload.error
-            : (payload.error as { message?: unknown })?.message;
-    return (
-        readApiErrorMessage(payload.msg) ||
-        readApiErrorMessage(payload.message) ||
-        readApiErrorMessage(errorMsg) ||
-        readApiErrorMessage(payload.detail) ||
-        ""
-    );
+    const errorMsg = typeof payload.error === "string" ? payload.error : (payload.error as { message?: unknown })?.message;
+    return readApiErrorMessage(payload.msg) || readApiErrorMessage(payload.message) || readApiErrorMessage(errorMsg) || readApiErrorMessage(payload.detail) || "";
 }
 
 function readAxiosError(error: unknown, fallback: string) {

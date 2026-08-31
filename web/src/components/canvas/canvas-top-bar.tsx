@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Bot, Download, Home, Images, Menu, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Trash2, Undo2, Upload } from "lucide-react";
+import { BookOpen, Bot, Download, FolderOpen, Home, Images, Menu, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Save, SaveAll, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Modal, Tooltip } from "antd";
 import { useTranslation } from "react-i18next";
 
 import { UserStatusActions } from "@/components/layout/user-status-actions";
+import { NZX_OPEN_DIALOG_EVENT, NZX_SAVE_AS_REQUEST_EVENT, NZX_SAVE_REQUEST_EVENT } from "@/components/canvas/nzx-open-bridge";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useCanvasSidePanelStore } from "@/stores/use-canvas-side-panel-store";
+import { useNzxFileStore, type NzxFileStatus } from "@/stores/use-nzx-file-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { DOCS_URL } from "@/constant/env";
 
@@ -61,6 +63,8 @@ export function CanvasTopBar({
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const sidePanelOpen = useCanvasSidePanelStore((state) => state.panelOpen);
     const toggleSidePanel = useCanvasSidePanelStore((state) => state.togglePanel);
+    const nzxStatus = useNzxFileStore((state) => state.status);
+    const nzxPath = useNzxFileStore((state) => state.path);
 
     useEffect(() => {
         if (!isTitleEditing) return;
@@ -70,6 +74,8 @@ export function CanvasTopBar({
         document.addEventListener("pointerdown", close, true);
         return () => document.removeEventListener("pointerdown", close, true);
     }, [isTitleEditing, onFinishTitleEditing]);
+
+    const dispatch = (name: string) => window.dispatchEvent(new Event(name));
 
     return (
         <>
@@ -93,6 +99,10 @@ export function CanvasTopBar({
                                 { key: "home", icon: <Home className="size-4" />, label: t("canvas.home"), onClick: onHome },
                                 { key: "docs", icon: <BookOpen className="size-4" />, label: t("canvas.docs"), onClick: () => window.open(DOCS_URL, "_blank", "noopener,noreferrer") },
                                 { key: "projects", icon: <Images className="size-4" />, label: t("canvas.projects"), onClick: onProjects },
+                                { type: "divider" },
+                                { key: "open-nzx", icon: <FolderOpen className="size-4" />, label: <MenuLabel text={t("canvas.nzx.open")} shortcut="Ctrl O" />, onClick: () => dispatch(NZX_OPEN_DIALOG_EVENT) },
+                                { key: "save-nzx", icon: <Save className="size-4" />, label: <MenuLabel text={t("canvas.nzx.save")} shortcut="Ctrl S" />, onClick: () => dispatch(NZX_SAVE_REQUEST_EVENT) },
+                                { key: "save-as-nzx", icon: <SaveAll className="size-4" />, label: <MenuLabel text={t("canvas.nzx.saveAs")} shortcut="Ctrl ⇧ S" />, onClick: () => dispatch(NZX_SAVE_AS_REQUEST_EVENT) },
                                 { type: "divider" },
                                 { key: "new", icon: <Plus className="size-4" />, label: t("canvas.create"), onClick: onCreateProject },
                                 { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: t("canvas.deleteCurrent"), onClick: onDeleteProject },
@@ -134,6 +144,7 @@ export function CanvasTopBar({
                                 {title}
                             </button>
                         )}
+                        <NzxSaveStatus status={nzxStatus} hasPath={Boolean(nzxPath)} />
                     </div>
                     <CompactAgentStatus status={compactAgentStatus} onClick={onToggleAgent} />
                 </div>
@@ -148,12 +159,15 @@ export function CanvasTopBar({
                         icon={<Bot className="size-4" />}
                         onClick={onToggleAgent}
                     >
-                        Agent
+                        {t("canvas.creativeDirector")}
                     </Button>
                 </div>
             </div>
             <Modal title={t("canvas.shortcuts")} open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
                 <div className="space-y-2 border-t pt-4 text-sm" style={{ borderColor: theme.node.stroke }}>
+                    <Shortcut keys={["Ctrl / Cmd", "S"]} value={t("canvas.nzx.save")} />
+                    <Shortcut keys={["Ctrl / Cmd", "Shift", "S"]} value={t("canvas.nzx.saveAs")} />
+                    <Shortcut keys={["Ctrl / Cmd", "O"]} value={t("canvas.nzx.open")} />
                     <Shortcut keys={["Ctrl / Space", t("canvas.shortcut.drag")]} value={t("canvas.shortcut.toggleTool")} />
                     <Shortcut keys={[t("canvas.shortcut.wheel")]} value={t("canvas.shortcut.zoom")} />
                     <Shortcut keys={[t("canvas.shortcut.zoomSlider")]} value={t("canvas.shortcut.preciseZoom")} />
@@ -170,6 +184,22 @@ export function CanvasTopBar({
                 </div>
             </Modal>
         </>
+    );
+}
+
+function NzxSaveStatus({ status, hasPath }: { status: NzxFileStatus; hasPath: boolean }) {
+    const { t } = useTranslation();
+    const colorTheme = useThemeStore((state) => state.theme);
+    const theme = canvasThemes[colorTheme];
+    const label = t(`canvas.nzx.status.${status}`);
+    const color = status === "modified" ? "#f59e0b" : status === "error" ? "#ef4444" : status === "saved" ? "#16a34a" : theme.node.muted;
+    return (
+        <Tooltip title={hasPath ? t("canvas.nzx.portableHint") : t("canvas.nzx.localHint")}>
+            <span className="flex shrink-0 items-center gap-1 text-[11px] font-normal" style={{ color }}>
+                <span className="size-1.5 rounded-full" style={{ background: color }} />
+                {label}
+            </span>
+        </Tooltip>
     );
 }
 

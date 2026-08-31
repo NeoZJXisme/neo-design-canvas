@@ -25,6 +25,25 @@ export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
 export type CanvasImageGenerationType = "generation" | "edit";
 
+// Neo Canvas keeps the mature built-in node types underneath and adds a
+// lightweight workflow role so packaging-design semantics can evolve without
+// duplicating the existing generation, reference, export, and Agent logic.
+export type CanvasWorkflowRole = "reference" | "prompt" | "generation" | "output";
+
+export type CanvasGenerationCostEntry = {
+    id: string;
+    nodeId: string;
+    mode: CanvasGenerationMode;
+    model: string;
+    provider: string;
+    currency: string;
+    unitPrice: number;
+    priceUnit: "per_call" | "per_output" | "per_second";
+    quantity: number;
+    estimatedCost: number;
+    createdAt: string;
+};
+
 export type CanvasNodeImage = {
     id: string;
     status: CanvasNodeStatus;
@@ -82,6 +101,11 @@ export type CanvasNodeMetadata = {
     durationMs?: number;
     groupId?: string;
     interactive?: boolean; // Plugin node interaction/move state; see CanvasNodeDefinition.interactionToggle.
+    workflowRole?: CanvasWorkflowRole;
+    favorite?: boolean;
+    rating?: number;
+    designNotes?: string;
+    estimatedCost?: number;
 };
 
 export type CanvasNodeData = {

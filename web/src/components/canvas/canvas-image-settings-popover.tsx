@@ -9,6 +9,9 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { AiConfig } from "@/stores/use-config-store";
 
+const NEO_BATCH_PRESETS = [1, 4, 8, 16, 36] as const;
+const NEO_MAX_BATCH_COUNT = 36;
+
 type CanvasImageSettingsPopoverProps = {
     config: AiConfig;
     onConfigChange: (key: keyof AiConfig, value: string) => void;
@@ -28,7 +31,7 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
     const [open, setOpen] = useState(false);
     const [buttonRect, setButtonRect] = useState<DOMRect | null>(null);
     const quality = config.quality || "auto";
-    const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
+    const count = Math.max(1, Math.min(NEO_MAX_BATCH_COUNT, Math.floor(Math.abs(Number(config.count)) || 1)));
     const activeSize = config.size || "auto";
     const updateOpen = (nextOpen: boolean) => {
         setOpen(nextOpen);
@@ -109,6 +112,7 @@ function ImageSettingsPortal({
         overflowY: "auto",
         color: theme.node.text,
     } as const;
+    const selectedCount = Math.max(1, Math.min(NEO_MAX_BATCH_COUNT, Math.floor(Math.abs(Number(config.count)) || 1)));
 
     return createPortal(
         <div
@@ -119,7 +123,26 @@ function ImageSettingsPortal({
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
         >
-            <ImageSettingsPanel config={config} onConfigChange={(key, value) => onConfigChange(key, value)} theme={theme} className="space-y-4" />
+            <div className="mb-5 space-y-2.5">
+                <div className="text-xs font-medium" style={{ color: theme.node.muted }}>
+                    Neo Canvas · 批量抽卡
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                    {NEO_BATCH_PRESETS.map((value) => (
+                        <button
+                            key={value}
+                            type="button"
+                            className="h-9 rounded-full border bg-transparent text-sm transition hover:opacity-80"
+                            style={{ borderColor: selectedCount === value ? theme.node.text : theme.node.stroke, color: theme.node.text }}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onClick={() => onConfigChange("count", String(value))}
+                        >
+                            {value}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <ImageSettingsPanel config={config} onConfigChange={(key, value) => onConfigChange(key, value)} theme={theme} className="space-y-4" maxCount={NEO_MAX_BATCH_COUNT} quickCount={0} />
         </div>,
         document.body,
     );

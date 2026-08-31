@@ -1,0 +1,82 @@
+{
+  "name": "neo-canvas-desktop",
+  "version": "0.1.4",
+  "private": true,
+  "description": "Neo Canvas desktop shell for Windows",
+  "main": "main.cjs",
+  "author": "NeoZJXisme",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.neozjx.neo.canvas",
+    "productName": "Neo Canvas",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web-dist"
+      },
+      {
+        "from": "../canvas-agent/dist",
+        "to": "canvas-agent/dist"
+      },
+      {
+        "from": "../canvas-agent/node_modules",
+        "to": "canvas-agent/node_modules"
+      },
+      {
+        "from": "../canvas-agent/package.json",
+        "to": "canvas-agent/package.json"
+      },
+      {
+        "from": "../canvas-agent/agent-instructions.md",
+        "to": "canvas-agent/agent-instructions.md"
+      },
+      {
+        "from": "../canvas-agent/README.md",
+        "to": "canvas-agent/README.md"
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": "NZX",
+        "name": "Neo Canvas Project",
+        "description": "Neo Canvas portable project",
+        "role": "Editor"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Neo-Canvas-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Neo Canvas"
+    }
+  }
+}

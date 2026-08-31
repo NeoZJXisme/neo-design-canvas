@@ -8,16 +8,22 @@ import i18n from "@/i18n";
 export type ApiCallFormat = "openai" | "gemini";
 export type ModelCapability = "image" | "video" | "text" | "audio";
 export type ReasoningEffort = "auto" | "low" | "medium" | "high" | "xhigh";
+export type ModelPriceUnit = "per_call" | "per_output" | "per_second";
+export type PriceCurrency = "USD" | "CNY";
 
 export type ChannelModel = {
     name: string;
     capability: ModelCapability;
     script?: string;
+    unitPrice?: number;
+    priceUnit?: ModelPriceUnit;
 };
 
 export type ModelChannel = {
     id: string;
     name: string;
+    provider?: string;
+    currency?: PriceCurrency;
     baseUrl: string;
     apiKey: string;
     apiFormat: ApiCallFormat;
@@ -184,6 +190,24 @@ export function resolveModelScript(config: AiConfig, value: string) {
     return findChannelModel(config, value)?.model.script?.trim() || "";
 }
 
+export function estimateModelCost(config: AiConfig, value: string, usage: { callCount: number; outputCount: number; seconds?: number }) {
+    const match = findChannelModel(config, value);
+    const unitPrice = match?.model.unitPrice;
+    const priceUnit = match?.model.priceUnit;
+    if (!match || !unitPrice || unitPrice <= 0 || !priceUnit) return null;
+    const quantity = priceUnit === "per_second" ? Math.max(0, usage.seconds || 0) : priceUnit === "per_output" ? Math.max(0, usage.outputCount) : Math.max(0, usage.callCount);
+    if (!quantity) return null;
+    return {
+        model: match.model.name,
+        provider: match.channel.provider?.trim() || match.channel.name,
+        currency: match.channel.currency || "USD",
+        unitPrice,
+        priceUnit,
+        quantity,
+        total: Math.round(unitPrice * quantity * 1_000_000) / 1_000_000,
+    };
+}
+
 function isAiConfigReady(config: AiConfig, model: string) {
     const channel = resolveModelChannel(config, model);
     return Boolean(model.trim() && channel.baseUrl.trim() && channel.apiKey.trim());
@@ -272,7 +296,9 @@ export function normalizeChannelModels(models: Array<string | ChannelModel> | un
         seen.add(name);
         const capability = typeof item === "string" ? guessCapability(name) : item.capability || guessCapability(name);
         const script = typeof item === "string" ? undefined : item.script?.trim() || undefined;
-        result.push({ name, capability, script });
+        const unitPrice = typeof item === "string" || !Number.isFinite(item.unitPrice) || Number(item.unitPrice) <= 0 ? undefined : Number(item.unitPrice);
+        const priceUnit = typeof item === "string" ? undefined : item.priceUnit;
+        result.push({ name, capability, script, unitPrice, priceUnit });
     }
     return result;
 }
@@ -282,6 +308,8 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
     return {
         id: channel?.id?.trim() || nanoid(),
         name: channel?.name?.trim() || i18n.t("config.channels.newName"),
+        provider: channel?.provider?.trim() || undefined,
+        currency: channel?.currency || "USD",
         baseUrl: channel?.baseUrl?.trim() || defaultBaseUrlForApiFormat(apiFormat),
         apiKey: channel?.apiKey || "",
         apiFormat,

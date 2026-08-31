@@ -3,7 +3,8 @@ import { RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { fetchChannelModels } from "@/services/api/image";
+import { guessModelProvider } from "@/lib/model-taxonomy";
+import { fetchCompatibleChannelModels, guessCompatibleCapability } from "@/services/api/channel-api";
 import type { ModelChannel } from "@/stores/use-config-store";
 
 // Channel model selector: fetch upstream models or add them manually, then include checked models in the channel list.
@@ -31,7 +32,7 @@ export function ModelSelectModal({ open, channel, selectedNames, onConfirm, onCl
     const currentList = activeTab === "new" ? fetched : existing;
     const visibleList = useMemo(() => {
         const keyword = search.trim().toLowerCase();
-        return keyword ? currentList.filter((name) => name.toLowerCase().includes(keyword)) : currentList;
+        return keyword ? currentList.filter((name) => `${name} ${guessModelProvider(name).label} ${guessCompatibleCapability(name)}`.toLowerCase().includes(keyword)) : currentList;
     }, [currentList, search]);
     const visibleSelectedCount = visibleList.filter((name) => selected.has(name)).length;
 
@@ -67,7 +68,7 @@ export function ModelSelectModal({ open, channel, selectedNames, onConfirm, onCl
         }
         setLoading(true);
         try {
-            const models = await fetchChannelModels(channel);
+            const models = await fetchCompatibleChannelModels(channel);
             setFetched(models);
             setActiveTab("new");
             message.success(t("config.modelSelect.fetched", { count: models.length }));
@@ -87,7 +88,7 @@ export function ModelSelectModal({ open, channel, selectedNames, onConfirm, onCl
     return (
         <Modal
             open={open}
-            width={880}
+            width={940}
             centered
             onCancel={onClose}
             title={
@@ -95,7 +96,7 @@ export function ModelSelectModal({ open, channel, selectedNames, onConfirm, onCl
                     {t("config.modelSelect.title")} <span className="ml-2 text-xs font-normal text-stone-500">{t("config.modelSelect.selected", { selected: selected.size, total: new Set([...existing, ...fetched]).size })}</span>
                 </span>
             }
-            styles={{ body: { maxHeight: "62vh", overflowY: "auto" } }}
+            styles={{ body: { maxHeight: "65vh", overflowY: "auto" } }}
             footer={[
                 <Button key="cancel" onClick={onClose}>
                     {t("common.cancel")}
@@ -106,14 +107,14 @@ export function ModelSelectModal({ open, channel, selectedNames, onConfirm, onCl
             ]}
         >
             <div className="flex flex-wrap items-center gap-3">
-                <Input className="min-w-[200px] flex-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("config.modelSelect.search")} prefix={<Search className="size-4 text-stone-400" />} allowClear />
+                <Input className="min-w-[200px] flex-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索模型、厂商或能力类型" prefix={<Search className="size-4 text-stone-400" />} allowClear />
                 <Input className="min-w-[180px] flex-1" value={manual} onChange={(event) => setManual(event.target.value)} onPressEnter={addManual} placeholder={t("config.modelSelect.modelName")} />
                 <Button onClick={addManual}>{t("config.modelSelect.add")}</Button>
                 <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void fetchModels()}>
                     {t("config.modelSelect.fetch")}
                 </Button>
             </div>
-            <div className="mt-2 text-xs text-stone-500">{t("config.modelSelect.description")}</div>
+            <div className="mt-2 text-xs text-stone-500">连接 Apilio / OpenAI-compatible 渠道后可读取上游完整模型池；Neo 会按模型名称自动识别厂商与文本、图片、视频、音频能力，你仍可在渠道编辑器里手动纠正。</div>
 
             <Tabs
                 className="mt-3"
@@ -138,14 +139,20 @@ export function ModelSelectModal({ open, channel, selectedNames, onConfirm, onCl
             </div>
 
             {visibleList.length ? (
-                <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
-                    {visibleList.map((name) => (
-                        <Checkbox key={name} checked={selected.has(name)} onChange={(event) => toggle(name, event.target.checked)}>
-                            <span className="truncate" title={name}>
-                                {name}
-                            </span>
-                        </Checkbox>
-                    ))}
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    {visibleList.map((name) => {
+                        const provider = guessModelProvider(name);
+                        const capability = guessCompatibleCapability(name);
+                        return (
+                            <Checkbox key={name} checked={selected.has(name)} onChange={(event) => toggle(name, event.target.checked)} className="min-w-0 rounded-md px-2 py-1.5 hover:bg-stone-50 dark:hover:bg-stone-900/40">
+                                <span className="flex min-w-0 items-center gap-2">
+                                    <span className="min-w-0 flex-1 truncate" title={name}>{name}</span>
+                                    <span className="m-0 shrink-0 rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] leading-none text-stone-500 dark:bg-stone-800 dark:text-stone-400">{provider.label}</span>
+                                    <span className="m-0 shrink-0 rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] leading-none text-stone-500 dark:bg-stone-800 dark:text-stone-400">{capability}</span>
+                                </span>
+                            </Checkbox>
+                        );
+                    })}
                 </div>
             ) : (
                 <div className="py-8 text-center text-sm text-stone-500">{t(activeTab === "new" ? "config.modelSelect.fetchedEmpty" : "config.modelSelect.existingEmpty")}</div>
