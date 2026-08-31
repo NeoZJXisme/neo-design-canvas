@@ -19,4 +19,8 @@ All notable changes to this project will be documented in this file.
 - Added the first **Apilio Adapter Registry**: Seedance / Veo / Wan / Grok Video / Sora2 families can use Apilio's unified `/v2/videos/generations` task protocol automatically.
 - Added native Kling routing for text-to-video and image-to-video, including Apilio's Kling task polling paths and a compatibility fallback for alternate query paths.
 - Added native Suno music generation routing with Suno model-version mapping (v5.5 / v5 / v4.5+ / v4.5 / v4), clip polling, and MP3 retrieval while preserving OpenAI-compatible TTS as the fallback for speech models.
+- Added portable **`.NZX` Neo Canvas Project** files containing `manifest.json`, `project.json`, and referenced local image / video / audio media instead of exporting project JSON alone.
+- Added `.NZX` Open / Save / Save As flows with `Ctrl+O`, `Ctrl+S`, and `Ctrl+Shift+S`, while retaining IndexedDB auto-save as crash recovery.
+- Added `.NZX` Windows file association and double-click startup handling in the Electron desktop app.
+- Added title-bar project file status for Auto-saved / Modified / Saving / Saved / Save failed and protection against reusing a previous project's desktop save binding after switching projects.
 
