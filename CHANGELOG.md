@@ -23,4 +23,5 @@ All notable changes to this project will be documented in this file.
 - Added `.NZX` Open / Save / Save As flows with `Ctrl+O`, `Ctrl+S`, and `Ctrl+Shift+S`, while retaining IndexedDB auto-save as crash recovery.
 - Added `.NZX` Windows file association and double-click startup handling in the Electron desktop app.
 - Added title-bar project file status for Auto-saved / Modified / Saving / Saved / Save failed and protection against reusing a previous project's desktop save binding after switching projects.
+- Kept local IndexedDB auto-save independent from `.NZX` portable-file saves, so an unsaved canvas can still recover locally while explicit `.NZX` saves remain user-controlled.
 
