@@ -1,0 +1,64 @@
+{
+  "name": "neo-canvas-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Neo Canvas desktop shell for Windows",
+  "main": "main.cjs",
+  "author": "NeoZJXisme",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.neozjx.neo.canvas",
+    "productName": "Neo Canvas",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web-dist"
+      },
+      {
+        "from": "../canvas-agent",
+        "to": "canvas-agent",
+        "filter": [
+          "dist/**/*",
+          "node_modules/**/*",
+          "package.json",
+          "agent-instructions.md",
+          "README.md"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Neo-Canvas-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Neo Canvas"
+    }
+  }
+}
