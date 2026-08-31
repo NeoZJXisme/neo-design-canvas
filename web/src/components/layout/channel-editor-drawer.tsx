@@ -1,19 +1,24 @@
-import { Button, Drawer, Input, InputNumber, Segmented, Select, Space } from "antd";
-import { ListPlus, Trash2 } from "lucide-react";
+import { App, Button, Drawer, Input, InputNumber, Segmented, Select, Space } from "antd";
+import { ListPlus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { fetchChannelModels } from "@/services/api/image";
 import { defaultBaseUrlForApiFormat, guessCapability, normalizeChannelModels, type ApiCallFormat, type ChannelModel, type ModelCapability, type ModelChannel, type ModelPriceUnit, type PriceCurrency } from "@/stores/use-config-store";
 import { ModelScriptEditor } from "./model-script-editor";
 import { ModelSelectModal } from "./model-select-modal";
 
 type ScriptTarget = { name: string; capability: ModelCapability; value: string };
+type PingResult = { latency: number; modelCount: number } | null;
 
 export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: boolean; channel: ModelChannel | null; onSave: (channel: ModelChannel) => void; onClose: () => void }) {
+    const { message } = App.useApp();
     const { t } = useTranslation();
     const [draft, setDraft] = useState<ModelChannel | null>(channel);
     const [selectOpen, setSelectOpen] = useState(false);
     const [scriptTarget, setScriptTarget] = useState<ScriptTarget | null>(null);
+    const [testing, setTesting] = useState(false);
+    const [pingResult, setPingResult] = useState<PingResult>(null);
     const apiFormatOptions: Array<{ label: string; value: ApiCallFormat }> = [
         { label: "OpenAI", value: "openai" },
         { label: "Gemini", value: "gemini" },
@@ -23,12 +28,18 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
     const currencyOptions: Array<{ label: string; value: PriceCurrency }> = (["USD", "CNY"] as const).map((value) => ({ label: value, value }));
 
     useEffect(() => {
-        if (open && channel) setDraft(channel);
+        if (open && channel) {
+            setDraft(channel);
+            setPingResult(null);
+        }
     }, [open, channel]);
 
     if (!draft) return null;
 
-    const patch = (value: Partial<ModelChannel>) => setDraft((current) => (current ? { ...current, ...value } : current));
+    const patch = (value: Partial<ModelChannel>) => {
+        setPingResult(null);
+        setDraft((current) => (current ? { ...current, ...value } : current));
+    };
     const setModels = (models: ChannelModel[]) => patch({ models });
 
     const changeApiFormat = (apiFormat: ApiCallFormat) => {
@@ -45,6 +56,30 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
     const setScript = (name: string, script: string) => setModels(draft.models.map((model) => (model.name === name ? { ...model, script: script || undefined } : model)));
     const setPricing = (name: string, patch: Pick<ChannelModel, "unitPrice" | "priceUnit">) => setModels(draft.models.map((model) => (model.name === name ? { ...model, ...patch } : model)));
     const removeModel = (name: string) => setModels(draft.models.filter((model) => model.name !== name));
+
+    const testConnection = async () => {
+        if (!draft.baseUrl.trim()) {
+            message.error(t("apiErrors.baseUrlRequired"));
+            return;
+        }
+        if (!draft.apiKey.trim()) {
+            message.error(t("apiErrors.apiKeyRequired"));
+            return;
+        }
+        setTesting(true);
+        setPingResult(null);
+        const startedAt = performance.now();
+        try {
+            const models = await fetchChannelModels(draft);
+            const latency = Math.max(1, Math.round(performance.now() - startedAt));
+            setPingResult({ latency, modelCount: models.length });
+            message.success(`API OK · ${latency} ms · ${models.length} models`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "API connection failed");
+        } finally {
+            setTesting(false);
+        }
+    };
 
     const save = () => {
         onSave({ ...draft, name: draft.name.trim() || t("config.channels.unnamed"), models: normalizeChannelModels(draft.models) });
@@ -92,6 +127,15 @@ export function ChannelEditorDrawer({ open, channel, onSave, onClose }: { open: 
                     <span className="mb-1 block text-sm font-medium">API Key</span>
                     <Input.Password value={draft.apiKey} onChange={(event) => patch({ apiKey: event.target.value })} placeholder="sk-..." />
                 </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-stone-200 bg-stone-50/60 px-3 py-2 dark:border-stone-800 dark:bg-stone-900/30">
+                <Button size="small" icon={<RefreshCw className="size-3.5" />} loading={testing} onClick={() => void testConnection()}>
+                    Ping API
+                </Button>
+                <span className="text-xs text-stone-500">
+                    {pingResult ? `Connected · ${pingResult.latency} ms · ${pingResult.modelCount} models` : "Test Base URL + API Key before adding models"}
+                </span>
             </div>
 
             <div className="mt-6 mb-3 flex flex-wrap items-center justify-between gap-2">
