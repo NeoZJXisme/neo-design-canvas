@@ -31,15 +31,24 @@
         "to": "web-dist"
       },
       {
-        "from": "../canvas-agent",
-        "to": "canvas-agent",
-        "filter": [
-          "dist/**/*",
-          "node_modules/**/*",
-          "package.json",
-          "agent-instructions.md",
-          "README.md"
-        ]
+        "from": "../canvas-agent/dist",
+        "to": "canvas-agent/dist"
+      },
+      {
+        "from": "../canvas-agent/node_modules",
+        "to": "canvas-agent/node_modules"
+      },
+      {
+        "from": "../canvas-agent/package.json",
+        "to": "canvas-agent/package.json"
+      },
+      {
+        "from": "../canvas-agent/agent-instructions.md",
+        "to": "canvas-agent/agent-instructions.md"
+      },
+      {
+        "from": "../canvas-agent/README.md",
+        "to": "canvas-agent/README.md"
       }
     ],
     "win": {
